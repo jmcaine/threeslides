@@ -22,6 +22,7 @@ And run your app::
 	
 (Or, with [aiohttp-devtools](https://github.com/aio-libs/aiohttp-devtools)
 
+	$ cd threeslides
 	$ adev runserver -s static --livereload app
 
 The adev server will run on port 8000 by default.  Other adev options may be
