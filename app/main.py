@@ -424,7 +424,6 @@ async def _ws_drive(hd):
 	match hd.payload['action']:
 		case 'clear':
 			await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers])
-			return # no more to do!
 		case 'live_phrase_id':
 			phrase_id = int(hd.payload['phrase_id'])
 			phrase = await db.get_phrase(hd.dbc, phrase_id)
@@ -446,7 +445,6 @@ async def _ws_drive(hd):
 				await _send_phrase_to_watchers(hd, content.children[0].phrases[0]) # TODO: this is kludgy-hardcodish; fix!
 		case _:
 			l.error(f'''Action "{hd.payload['action']}" not recognized!''')
-			return # no more to do!
 
 async def _send_phrase_to_watchers(hd, phrase):
 	phrase_div = html.div_phrase(phrase)
