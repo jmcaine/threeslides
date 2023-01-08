@@ -447,16 +447,21 @@ async def _ws_drive(hd):
 			l.error(f'''Action "{hd.payload['action']}" not recognized!''')
 
 async def _send_phrase_to_watchers(hd, phrase):
-	phrase_div = html.div_phrase(phrase)
-	# TODO: check now, after that DB lookup, to see if there are more drive messages on the pipe?  Then abandon the dispersal until new drive message(s) are folded in?
-		
-	await asyncio.gather(*[ws.send_json({
-		'task': 'set_live_content', 
-		'display_scheme': phrase.phrase['display_scheme'],
-		'content': phrase_div,
-		#TODO: 'bg': bg,
-	}) for ws in hd.lpi.watchers])
-	# TODO: separate "royal watchers" from plebians
+	if phrase.content[0]['content'].endswith('.jpg'): # TODO: KLUDGY
+		image = settings.k_static_url + f"images/{phrase.content[0]['content']}"
+		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers])
+		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': image}) for ws in hd.lpi.watchers])
+	else:
+		phrase_div = html.div_phrase(phrase)
+		# TODO: check now, after that DB lookup, to see if there are more drive messages on the pipe?  Then abandon the dispersal until new drive message(s) are folded in?
+			
+		await asyncio.gather(*[ws.send_json({
+			'task': 'set_live_content', 
+			'display_scheme': phrase.phrase['display_scheme'],
+			'content': phrase_div,
+			#TODO: 'bg': bg,
+		}) for ws in hd.lpi.watchers])
+		# TODO: separate "royal watchers" from plebians
 
 async def _send_new_live_phrase_id_to_other_drivers(hd, div_id):
 	await asyncio.gather(*[ws.send_json({
