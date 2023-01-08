@@ -7,7 +7,7 @@ Distributed / multi-host slide presentation system
 	$ . ve/bin/activate
 	$ pip install --upgrade pip
 	$ git clone git@github.com:jmcaine/threeslides.git
-	$ pip install -r requirements.txt
+	$ pip install -r threeslides/requirements.txt
 
 (Note, the pip install may rely on apt-installs like build-essential, libffi-dev, python3-dev, ...)
 
@@ -17,6 +17,7 @@ Create the database ('apt install sqlite3' will be required for this, of course)
 
 And run your app::
 
+	$ cd threeslides
 	$ python -m aiohttp.web -H localhost -P 8080 app.main:init
 	
 (Or, with [aiohttp-devtools](https://github.com/aio-libs/aiohttp-devtools)
