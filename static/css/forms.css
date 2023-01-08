@@ -1,0 +1,241 @@
+
+html,
+body,
+.full_screen {
+	height: 100%;
+	margin: 0;
+	padding: 0;
+}
+.full_screen {
+	display: flex;
+	flex-direction: column;
+}
+
+.header, .footer {
+	flex: 0 0 auto; /* set to NOT flex (within full-screen... */
+	height: 50px;
+}
+.header {
+	display: flex; /* children will stack in a row */
+	flex-flow: row-reverse nowrap;
+}
+
+/* Thanks to https://www.sitepoint.com/css-grid-web-form-layout/ for great guidance here */
+
+p {
+	max-width: 35em;
+	margin: 1em auto;
+}
+
+fieldset {
+	max-width: 35em;
+	padding: 4px;
+	margin: 2em auto;
+	border: 0 none;
+}
+
+legend {
+	font-size: 1.2em;
+	width: 100%;
+	border-bottom: 1px dotted #888;
+}
+
+input, output, textarea, select, button {
+	box-sizing: border-box;
+	padding: 0.2em 0.4em;
+	margin: 0.2em 0;
+	outline: 0 none;
+	border: 0 none;
+	box-shadow: none;
+}
+
+button {
+	max-width: 12em;
+	padding: 0.2em 2em;
+	background-color: #eee;
+	box-shadow: 0 2px 0 #ccc;
+	cursor: pointer;
+}
+
+label {
+	box-sizing: border-box;
+	user-select: none;
+	cursor: pointer;
+}
+
+input:focus + label, textarea:focus + label, select:focus + label {
+	color: #933;
+}
+
+input:checked + label {
+	font-weight: bold;
+}
+
+input, output, textarea, select, button {
+	clear: both;
+	float: right;
+	width: 60%;
+}
+
+label {
+	float: left;
+	width: 40%;
+	text-align: right;
+	padding: 0.25em 1em 0 0;
+}
+
+button, input[type="checkbox"], input[type="radio"] {
+	width: auto;
+	float: left;
+	margin: 0.5em 0.5em 0 40%;
+}
+
+input[type="checkbox"] + label, input[type="radio"] + label {
+	width: auto;
+	text-align: left;
+}
+
+input[type="date"] {
+	width: 10em;
+}
+input[type="time"] {
+	width: 10em;
+}
+
+/* grid layout */
+@supports (display: grid) {
+
+	.formgrid {
+		display: grid;
+		grid-template-columns: 1fr 1em 2fr;
+		grid-gap: 0.3em 0.6em;
+		grid-auto-flow: dense;
+		align-items: center;
+	}
+
+	input, output, textarea, select, button {
+		grid-column: 2 / 4;
+		width: auto;
+		margin: 0;
+	}
+
+	input[type="checkbox"], input[type="radio"] {
+		grid-column: 1 / 3;
+		justify-self: end;
+		margin: 0;
+	}
+
+	label, input[type="checkbox"] + label, input[type="radio"] + label {
+		width: auto;
+		padding: 0;
+		margin: 0;
+	}
+
+	textarea + label {
+		align-self: start;
+	}
+
+}
+
+.selectable_row {
+}
+
+.selectable_row:hover {
+	background-color: #abec8e;
+	cursor: pointer;
+}
+
+/* ------------------------------------------------------------- */
+/* The following is taken from the bottom half of driver.css... need to consolidate; the slight diff there is that the screen is a 100% with as-neede scrollbars in the individual flexboxes */
+
+.arrangements {
+	display: flex; /* left and right children will stack side-by-side (row) */
+	flex-flow: row nowrap;
+	overflow: hidden;
+
+	/*width: 100%;
+	max-width: 35em;*/
+	width: 35em;
+	padding: 4px;
+	margin: 0 auto; /*2em auto;*/
+	border: 0 none;
+}
+
+.left {
+	width: 40%;
+	overflow-y: auto; /* show scrollbar when needed */
+}
+
+.middle {
+	flex: 1 1 auto;
+	overflow-y: auto; /* show scrollbar when needed */
+}
+
+.live { /*TODO(?) the term 'live' comes from drive.js; this css is more for edit.js, and there's no "live", as in a live production, but there is a "chosen"; we're leaving this nomenclature because it facilitates some code-sharing in drive.js / edit.js */
+	background-color: #ee0000;
+	font-weight: 800;
+}
+
+.buttonish {
+	margin: 7px;
+	padding: 7px;
+	background-color: #abec8e;
+}
+.buttonish:hover {
+	/* background-color: #53d441;  */
+	background-color: #53d441;
+	cursor: pointer;
+}
+
+.phrase {
+}
+
+.phrase:hover {
+	cursor: pointer;
+	background-color: #abec8e;
+}
+
+.content_title {
+}
+
+.content_title:hover {
+	cursor: pointer;
+	background-color: #abec8e;
+}
+
+/* ----------------------------------------------------------------- */
+
+.buttoned_header {
+	width: 100%;
+	display: flex; /* text and buttons will flow in a row */
+	flex-flow: row;
+}
+
+.buttoned_header .text {
+	margin: 1px;
+}
+.buttoned_header .text:hover {
+	cursor: pointer;
+	background-color: #abec8e;
+}
+
+.buttoned_header button {
+	margin: 1px;
+	padding: 1px 5px;
+	font-size: 1em;
+	border-radius: 4px;
+	color: white;
+	background-color: #7475b8;
+	border: 1px;
+	cursor: pointer;
+}
+
+.buttoned_header .push {
+	margin-left: auto;
+}
+
+/* ----------------------------------------------------------------- */
+
+.highlighted {
+  font-weight: bold;
+}

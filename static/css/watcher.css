@@ -1,0 +1,83 @@
+html,
+body {
+	height: 100%;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	overflow: hidden;   /* hide scrollbars */
+}
+body {
+	background-size: auto 100%;
+	opacity: 1.0;
+	transition: background 1.0s linear;
+}
+
+
+.full_frame {
+	position: absolute;
+	background-color: transparent;
+	height: 100%;
+	width: 100%;
+	/*opacity: 0;  start "on"; full-frame is default 
+	transition: opacity 2s ease; */
+}
+
+.halfh_frame_frame {
+	position: absolute;
+	background-color: transparent;
+	height: 100%;
+	width: 100%;
+}
+
+.halfh_frame {
+	position: relative;
+	background-color: transparent;
+	height: 50%;
+}
+
+
+.vcenter_content {
+	position: absolute;
+	background-color: transparent;
+	height: 100%;
+	width: 100%;
+	/* padding: 5%; BAD - causes total half-frame failure! */
+	/* margin: auto;  BAD - causes total half-frame failure! */
+	/* will-change: opacity; - to help with performance on SBCs; don't seem to need this, after all - it doesn't help with text-shadow transition performance (we abandoned text-shadow, and use stroke-width now), and it doesn't seem to be necessary for stroke-width transition performance.  Furthermore, warnings are issued about being careful to not overuse this, and to now use it merely "anticipating" performance problems */
+	opacity: 0; /* start "off"; full-frame is default */
+	transition: opacity 1s ease;
+}
+
+.vcenter {
+	position: relative;
+	top: 50%;
+	transform: translateY(-50%);
+}
+
+.halfback {
+}
+
+.halo_content, .outline_content {
+	padding: 0.3em;
+	color: black;
+	font-size: 5vw;
+	text-align: center;
+}
+
+.halo_content {
+	font-family: verdana, sans-serif;
+	/*font-family: arial black, sans-serif; -- arial black looks pretty good, with the 'stroke' settings, below, but it is a MS font (have to install ttf-mscorefonts-installer), and verdana seems to be an even better choice, on closer inspection, in terms of narrower tracking, plenty of girth, etc., as long as it's used at full font-weight (900) */
+	font-weight: 900;
+	text-shadow: 0px 0px 15px white, 0px 0px 20px white, 0px 0px 20px white, 0px 0px 20px white, 0px 0px 30px white; /* poor performance; won't run on SBCs!! */
+}
+
+.outline_content {
+	background: rgba(255, 255, 255, 0.35); /* translucent "bar" for the text to sit in; to increase clarity */
+	/*font-family: 'Titan One', verdana, sans-serif; */
+	font-family: 'Alfa Slab One', verdana, sans-serif;
+	font-weight: 900;
+	-webkit-text-stroke-width: 0.07em;
+	/*-webkit-text-stroke-width: 0.04em; good for verdana fallback */
+	-webkit-text-stroke-color: white;
+}
+

@@ -1,0 +1,31 @@
+
+.two-col { /* BELONGS in a div that is display:flex, flex-direction: column */
+	flex: 1 1 auto;
+
+	display: flex; /* left and right children will stack side-by-side (row) */
+	flex-flow: row nowrap;
+	overflow: hidden;
+}
+
+.two-col .left-thin {
+	width: 250px;
+	overflow-y: auto; /* show scrollbar when needed */
+}
+
+.two-col .right-rest {
+	flex: 1 1 auto;
+	overflow-y: auto; /* show scrollbar when needed */
+}
+
+
+.header, .footer {
+	flex: 0 0 auto; /* set to NOT flex (within full-screen... */
+	height: 50px;
+}
+.header {
+	display: flex; /* children will stack in a row */
+	flex-flow: row-reverse nowrap;
+}
+.header_item {
+	color: blue;
+}

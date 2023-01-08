@@ -1,0 +1,30 @@
+html,
+body {
+	height: 100%;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	overflow: hidden;   /* hide scrollbars */
+}
+body {
+	display: flex;
+	flex-direction: column;
+}
+
+
+.buttonish {
+	margin: 7px;
+	padding: 7px;
+	background-color: #abec8e;
+}
+.buttonish:hover {
+	background-color: #53d441;
+	cursor: pointer;
+}
+
+.live, .highlighted {
+	/* background-color: #ee0000; */
+	background-color: #53ff41; /* just a touch beyond .buttonish:hover */
+	font-weight: bold;
+}
+
