@@ -20,6 +20,9 @@ from uuid import uuid4
 from cryptography import fernet
 import base64
 
+from os.path import exists as path_exists
+#import os
+
 from aiohttp import web, WSMsgType, WSCloseCode
 from aiohttp_session import setup as setup_session, get_session, new_session
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
@@ -63,8 +66,8 @@ g_twixt_work = {} # TODO: note, we 'del g_twixt_work[twixt_id]' and 'del session
 
 #g_announcements = ['s - 01.jpg', 's - 02.jpg', ]
 #g_announcements = ['s - 01.jpg', 's - 02.jpg', 's - 03.jpg', 's - 04.jpg', 's - 05.jpg', 's - 06.jpg', 's - 07.jpg', 's - 08.jpg', 's - 09.jpg', 's - 10.jpg', 's - 11.jpg', 's - 12.jpg', 's - 13.jpg', 's - 14.jpg', 's - 15.jpg', 's - 16.jpg', 's - 17.jpg', ]
-g_announcements = ['s - 01.jpg', 's - 02.jpg', 's - 03.jpg', 's - 04.jpg', 's - 05.jpg', 's - 06.jpg', 's - 07.jpg', 's - 08.jpg', 's - 09.jpg', 's - 10.jpg', 's - 11.jpg', 's - 12.jpg', ]
-g_announcement_id = 0;
+#g_announcements = ['s - 01.jpg', 's - 02.jpg', 's - 03.jpg', 's - 04.jpg', 's - 05.jpg', 's - 06.jpg', 's - 07.jpg', 's - 08.jpg', 's - 09.jpg', 's - 10.jpg', 's - 11.jpg', 's - 12.jpg', ]
+g_announcement_id = 1;
 
 # Utils -----------------------------------------------------------------------
 
@@ -542,11 +545,18 @@ async def _send_production_content(hd, production_id, click_script, content_titl
 	arrangement_content_div = html.detail_nested_content(first_arrangement_content, click_script, content_titler)
 	await hd.ws.send_json({'task': 'set_production_and_arrangement_content', 'production_content': production_content_div, 'arrangement_content': arrangement_content_div})
 
+_announcement_path = lambda num: f"images/announcements/s - {str(num).rjust(2, '0')}.jpg"
 async def _ws_fetch_new_announcement(hd):
-	global g_announcement_id
-	global g_announcements
-	url = settings.k_static_url + f'announcements/{g_announcements[g_announcement_id]}'
-	g_announcement_id = (g_announcement_id + 1) % len(g_announcements)
+	global g_announcement_id # TODO: use hd instead
+	#global g_announcements
+	path = _announcement_path(g_announcement_id)
+	if not path_exists('static/' + path): # TODO: improve! use pathstuffs!
+		g_announcement_id = 1 # start over
+		path = _announcement_path(g_announcement_id)
+	url = settings.k_static_url + path
+	#url = settings.k_static_url + f'announcements/{g_announcements[g_announcement_id]}'
+	g_announcement_id += 1
+	#g_announcement_id = (g_announcement_id + 1) % len(g_announcements)
 	await asyncio.gather(*[ws.send_json({'task': 'next_announcement', 'url': url}) for ws in hd.lpi.watchers])
 	
 
