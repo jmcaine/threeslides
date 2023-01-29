@@ -45,7 +45,7 @@ from . import util as U
 
 # Logging ---------------------------------------------------------------------
 
-logging.getLogger('aiosqlite').setLevel(logging.CRITICAL)
+logging.getLogger('aiosqlite').setLevel(logging.DEBUG)
 logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
 logging.getLogger('aiohttp_session').setLevel(logging.CRITICAL)
 logging.getLogger('asyncio').setLevel(logging.CRITICAL)
@@ -64,9 +64,6 @@ l = logging.getLogger(__name__)
 # Can't store coroutines in sessions, directly; not even redis or memcached directories, so we store them in global memory, in this dict:
 g_twixt_work = {} # TODO: note, we 'del g_twixt_work[twixt_id]' and 'del session['twixt_id']' "as we go", but there's a real possibility of abandonment (as in, a page fails to fully load or to create the ws in its javascript, so the first ws_messages call never issues) -- so we should make a watchdog that cleans this out occasionally; thus, we'd need timestamps on the items within, as well
 
-#g_announcements = ['s - 01.jpg', 's - 02.jpg', ]
-#g_announcements = ['s - 01.jpg', 's - 02.jpg', 's - 03.jpg', 's - 04.jpg', 's - 05.jpg', 's - 06.jpg', 's - 07.jpg', 's - 08.jpg', 's - 09.jpg', 's - 10.jpg', 's - 11.jpg', 's - 12.jpg', 's - 13.jpg', 's - 14.jpg', 's - 15.jpg', 's - 16.jpg', 's - 17.jpg', ]
-#g_announcements = ['s - 01.jpg', 's - 02.jpg', 's - 03.jpg', 's - 04.jpg', 's - 05.jpg', 's - 06.jpg', 's - 07.jpg', 's - 08.jpg', 's - 09.jpg', 's - 10.jpg', 's - 11.jpg', 's - 12.jpg', ]
 g_announcement_id = 1;
 
 # Utils -----------------------------------------------------------------------
@@ -234,80 +231,107 @@ async def watch(rq):
 	return hr(html.watch(_ws_url(rq), lp))
 
 
-@rt.view('/create_production', name = 'create_production')
-class Create_Production(web.View):
-	def _title(self):
-		return 'Production'
+# ------------------------
+
+class Edit_Production_Service(web.View):
 
 	async def get(self):
-		vw = await _set_up_common_view_get(self, dbc = True)
-		upcomings = await db.get_coming_productions(vw.dbc)
-		return hr(html.new_production(html.Form(vw.rq.rel_url), self._title(), upcomings))
+		z = await _set_up_common_get(self.request, dbc = True)
+		pid = int(z.rq.match_info['production_id'])
+		if pid:
+			production = await db.get_production(z.dbc, pid)
+			upcomings = None
+			templates = None
+		else:
+			production = None
+			upcomings = await db.get_coming_productions(z.dbc)
+			templates = await db.get_production_templates(z.dbc) # TODO: add site-id, to filter particular site's own templates!
+
+		return hr(html.edit_production(html.Form(z.rq.rel_url), self._title(), production, upcomings, templates))
 
 	async def post(self):
+		z = await _set_up_common_post(self.request)
+		invalids = [] #TODO...  _validate_regex(z.data, invalids, ( ...
 		try:
-			vw = await _set_up_common_view_post(self)
-			invalids = [] #TODO...  _validate_regex(vw.data, invalids, ( ...
-			d = dt.date.fromisoformat(vw.data['date'])
-			t = dt.time.fromisoformat(vw.data['time'])
+			d = dt.date.fromisoformat(z.data['date'])
+			t = dt.time.fromisoformat(z.data['time'])
 			dttm = dt.datetime(d.year, d.month, d.day, t.hour, t.minute, t.second)
-			production_id = await db.create_production(vw.dbc, vw.data['name'], dttm.isoformat())
-			raise web.HTTPFound(_gurl(vw.rq, f'edit_{self._title().lower()}', {'production_id': str(production_id)}))
-
+			pid = int(z.rq.match_info['production_id'])
+			if pid:
+				#TODO: check login credentials before going on! (ensure that user has access to this production
+				await db.edit_production(z.dbc, pid, z.data['name'], dttm.isoformat())
+			else: # no pid means: new production
+				# Create brand new production:
+				pid = await db.create_production(z.dbc, z.data['name'], dttm.isoformat(), z.data.get('template'))
+			raise web.HTTPFound(_gurl(z.rq, f'edit_production_arrangements', {'production_id': str(pid)}))
 		except web.HTTPRedirection:
 			raise # move on
 		except: # TODO: differentiate, and add errors to hr!
-			l.debug('EXCEPTION in Create_Production::post()!!!')
-			return hr(html.new_production(html.Form(vw.rq.rel_url, vw.data, invalids), self._title()))
+			l.error(traceback.format_exc())
+			l.debug('EXCEPTION in Edit_Production::post()!!!') #TODO
+			if pid:
+				production = await db.get_production(z.dbc, pid)
+				templates = None
+			else:
+				production = None
+				templates = await db.get_production_templates(z.dbc) # TODO: add site-id, to filter particular site's own templates!
+			return hr(html.edit_production(html.Form(z.rq.rel_url, z.data, invalids), self._title(), production, None, templates))
 
-@rt.view('/create_service')
-class Create_Service(Create_Production):
-	def _title(self):
-		return 'Service' # otherwise this class is just an alias
+@rt.get('/create_production', name = 'create_production')
+async def create_production(rq):
+	raise web.HTTPFound(_gurl(rq, f'edit_production', {'production_id': '0'})) # 0 is signal that this is a brand new production
+@rt.get('/create_service', name = 'create_service')
+async def create_service(rq):
+	raise web.HTTPFound(_gurl(rq, f'edit_service', {'production_id': '0'})) # 0 is signal that this is a brand new production
 
-
-@rt.view('/edit_production/{production_id}', name = 'edit_production')
-class Edit_Production(web.View):
+class Production:
 	def _title(self):
 		return 'Production'
-	
-	async def get(self):
-		vw = await _set_up_common_view_get(self, dbc = True)
-		#TODO: check login credentials before going on! (ensure that user has access to this production
-		pid = vw.rq.match_info['production_id']
-		production = await db.get_production(vw.dbc, pid)
-		arrangement_titles = await db.get_production_arrangement_titles(vw.dbc, pid)
-		first_arrangement_content = await db.get_arrangement_content(vw.dbc, arrangement_titles[0].arrangement_id) if arrangement_titles else []
-		return hr(html.edit_production(_ws_url(vw.rq), html.Form(vw.rq.rel_url), self._title(), production, arrangement_titles, first_arrangement_content))
-			
-
-	async def post(self):
-		return hr(html.edit_production(_ws_url(vw.rq), html.Form(vw.rq.rel_url, vw.data, invalids), self._title(), await db.get_production(vw.dbc, vw.rq.match_info['production_id'])))
-
-
-@rt.view('/edit_service/{production_id}')
-class Edit_Service(Edit_Production):
+class Service:
 	def _title(self):
-		return 'Service' # otherwise this class is just an alias
+		return 'Service'
+
+@rt.view('/edit_production/{production_id}', name = 'edit_production')
+class Edit_Production(Edit_Production_Service, Production):
+	pass
+@rt.view('/edit_service/{production_id}', name = 'edit_service')
+class Edit_Service(Edit_Production_Service, Service):
+	pass
+
+
+# ------------------------
+
+@rt.get('/edit_production_arrangements/{production_id}', name = 'edit_production_arrangements')
+async def edit_production_arrangements(rq):
+	z = await _set_up_common_get(rq, dbc = True)
+	#TODO: check login credentials before going on! (ensure that user has access to this production
+	pid = z.rq.match_info['production_id']
+	production = await db.get_production(z.dbc, pid)
+	arrangement_titles = await db.get_production_arrangement_titles(z.dbc, pid)
+	first_arrangement_content = await db.get_arrangement_content(z.dbc, arrangement_titles[0].arrangement_id) if arrangement_titles else None
+	available_compositions = await db.get_available_compositions(z.dbc, arrangement_titles[0].arrangement_id) if arrangement_titles else None
+	return hr(html.edit_production_arrangements(_ws_url(z.rq), html.Form(z.rq.rel_url), production, arrangement_titles, first_arrangement_content, available_compositions))
+
+
 
 @rt.view('/create_arrangement', name = 'create_arrangement')
 class Create_Arrangement(web.View):
 	async def get(self):
-		vw = await _set_up_common_view_get(self, dbc = True)
-		return hr(html.new_arrangement(html.Form(vw.rq.rel_url)))
+		z = await _set_up_common_get(self.request, dbc = True)
+		return hr(html.new_arrangement(html.Form(z.rq.rel_url)))
 
 	async def post(self):
 		try:
-			vw = await _set_up_common_view_post(self)
-			invalids = [] #TODO...  _validate_regex(vw.data, invalids, ( ...
-			arrangement_id = await db.create_arrangement(vw.dbc, vw.data['name']) # TODO - more args! head-composition (?? and composition arrangement (v1, v2, etc.)!!!)
-			raise web.HTTPFound(_gurl(vw.rq, 'edit_arrangement', {'arrangement_id': str(arrangement_id)}))
+			z = await _set_up_common_post(self.request)
+			invalids = [] #TODO...  _validate_regex(z.data, invalids, ( ...
+			arrangement_id = await db.create_arrangement(z.dbc, z.data['name']) # TODO - more args! head-composition (?? and composition arrangement (v1, v2, etc.)!!!)
+			raise web.HTTPFound(_gurl(z.rq, 'edit_arrangement', {'arrangement_id': str(arrangement_id)}))
 
 		except web.HTTPRedirection:
 			raise # move on
 		except: # TODO: differentiate, and add errors to hr!
 			l.debug('EXCEPTION in Create_Arrangement::post()!!!')
-			return hr(html.new_arrangement(html.Form(vw.rq.rel_url)))
+			return hr(html.new_arrangement(html.Form(z.rq.rel_url)))
 
 
 # ----------------------------------------------------------------
@@ -405,13 +429,16 @@ async def _start_or_join_live_production(rq, dbc, production_id):
 		)
 	return lp
 
-async def _get_arrangement_content(hd, arrangement_id, click_script, content_titler, highlight_arrangement_composition_id = None):
+async def _get_arrangement_content(hd, arrangement_id, click_script, content_titler, include_available_compositions = False, highlight_arrangement_composition_id = None):
 	content = await db.get_arrangement_content(hd.dbc, arrangement_id)
-	content_div = html.detail_nested_content(content, click_script, content_titler, highlight_arrangement_composition_id)
+	available_compositions = None # unless...
+	if include_available_compositions:
+		available_compositions = await db.get_available_compositions(hd.dbc, arrangement_id)
+	content_div = html.detail_nested_content(content, click_script, content_titler, available_compositions, highlight_arrangement_composition_id)
 	return content, content_div
 
-async def _send_arrangement_content(hd, arrangement_id, click_script, content_titler, highlight_arrangement_composition_id = None):
-	content, content_div = await _get_arrangement_content(hd, arrangement_id, click_script, content_titler, highlight_arrangement_composition_id)
+async def _send_arrangement_content(hd, arrangement_id, click_script, content_titler, include_available_compositions = False, highlight_arrangement_composition_id = None):
+	content, content_div = await _get_arrangement_content(hd, arrangement_id, click_script, content_titler, include_available_compositions, highlight_arrangement_composition_id)
 	await hd.ws.send_json({'task': 'set_arrangement_content', 'content': content_div})
 	return content
 
@@ -496,41 +523,61 @@ async def _handle_announcements_arrangement(hd, arrangement_id):
 
 async def _ws_edit(hd):
 	#TODO: SEE TODO items in _ws_drive!
+	__send_arrangement_content = lambda a_id, ac_id: _send_arrangement_content(hd, a_id, 'edit_phrase', html._content_title_with_edits, True, ac_id)
+	match hd.payload['action']:
+		case 'phrase_id':
+			phrase = await db.get_phrase(hd.dbc, int(hd.payload['phrase_id']))
+		#case 'composition_id': # happens, e.g., when somebody clicks on "verse 3" ("header text", rather than clicking on the verse 3 "body")
+			#	phrase = await db.get_composition_first_phrase(hd.dbc, int(hd.payload['composition_id']))
+		case 'arrangement_id': # happens when somebody clicks on a new arrangement (title)
+			arrangement_id = int(hd.payload['arrangement_id'])
+			content = await __send_arrangement_content(arrangement_id, None)
+			# BG:
+			bg = settings.k_static_url + f'bgs/{content.background}'
+			await hd.ws.send_json({'task': 'set_arrangement_bg', 'bg': bg})
+			# Announcements TODO: kludgy!
+			if arrangement_id == 20: #TODO: remove HARDCODE!
+				pass#TODO
+		case 'move_composition_down':
+			await _move_composition_up_down(hd, 1)
+		case 'move_composition_up':
+			await _move_composition_up_down(hd, -1)
+		case 'insert_composition_before':
+			arrangement_id, new_arrangement_composition_id = await db.insert_composition_before(hd.dbc, int(hd.payload['arrangement_composition_id']), int(hd.payload['new_composition_id']))
+			await __send_arrangement_content(arrangement_id, new_arrangement_composition_id)
+		case 'remove_composition':
+			ac_id = int(hd.payload['arrangement_composition_id'])
+			arrangement_id = await db.remove_composition_from_arrangement(hd.dbc, ac_id)
+			await __send_arrangement_content(arrangement_id, None)
 
-	if hd.payload['action'] == 'phrase_id':
-		phrase = await db.get_phrase(hd.dbc, int(hd.payload['phrase_id']))
-	#elif hd.payload['action'] == 'composition_id': # happens, e.g., when somebody clicks on "verse 3" ("header text", rather than clicking on the verse 3 "body")
-	#	phrase = await db.get_composition_first_phrase(hd.dbc, int(hd.payload['composition_id']))
-	elif hd.payload['action'] == 'arrangement_id': # happens when somebody clicks on a new arrangement (title)
-		arrangement_id = int(hd.payload['arrangement_id'])
-		content = await _send_arrangement_content(hd, arrangement_id, 'edit_phrase', html._content_title_with_edits)
-		# BG:
-		bg = settings.k_static_url + f'bgs/{content.background}'
-		await hd.ws.send_json({'task': 'set_arrangement_bg', 'bg': bg})
-		# Announcements TODO: kludgy!
-		if arrangement_id == 20: #TODO: remove HARDCODE!
-			pass#TODO
-	elif hd.payload['action'] == 'move_composition_down':
-		await _move_composition_up_down(hd, 1)
-	elif hd.payload['action'] == 'move_composition_up':
-		await _move_composition_up_down(hd, -1)
-	elif hd.payload['action'] == 'move_arrangement_down':
-		await _move_arrangement_up_down(hd, 1)
-	elif hd.payload['action'] == 'move_arrangement_up':
-		await _move_arrangement_up_down(hd, -1)
+		case 'filter_arrangements':
+			results = await db.get_compositions_and_arrangements(hd.dbc, hd.payload['strng'])
+			result_content = html.build_arrangement_filter_result_content(results)
+			await hd.ws.send_json({'task': 'filter_arrangements_results', 'result_content': result_content, 'div_id': hd.payload['div_id']})
+
+
+		case 'insert_arrangement_before':
+			pass # TODO!!!
+
+		case 'move_arrangement_down':
+			await _move_arrangement_up_down(hd, 1)
+		case 'move_arrangement_up':
+			await _move_arrangement_up_down(hd, -1)
+
 
 async def _move_composition_up_down(hd, up_down):
 		ac_id = int(hd.payload['arrangement_composition_id'])
 		arrangement_id = await db.move_composition_up_down(hd.dbc, ac_id, up_down)
-		await _send_arrangement_content(hd, arrangement_id, 'edit_phrase', html._content_title_with_edits, ac_id)
+		await _send_arrangement_content(hd, arrangement_id, 'edit_phrase', html._content_title_with_edits, True, ac_id)
 
 async def _move_arrangement_up_down(hd, up_down):
 		pa_id = int(hd.payload['production_arrangement_id'])
 		production_id = await db.move_arrangement_up_down(hd.dbc, pa_id, up_down)
-		await _send_production_content(hd, production_id, 'edit_phrase', html._content_title_with_edits, pa_id)
+		await _send_production_content(hd, production_id, 'edit_phrase', html._content_title_with_edits, True, pa_id)
 
-async def _send_production_content(hd, production_id, click_script, content_titler, production_arrangement_id_to_highlight = None):
+async def _send_production_content(hd, production_id, click_script, content_titler, include_available_compositions = False, production_arrangement_id_to_highlight = None):
 	arrangement_titles = await db.get_production_arrangement_titles(hd.dbc, production_id)
+	arrangement_id = None
 	if not arrangement_titles:
 		first_arrangement_content = []
 	else:
@@ -538,25 +585,26 @@ async def _send_production_content(hd, production_id, click_script, content_titl
 			first_arrangement_content = await db.get_production_arrangement_content(hd.dbc, production_arrangement_id_to_highlight)
 		else:
 			first = arrangement_titles[0] # just use the first arrangement in the production...
-			first_arrangement_content = await db.get_arrangement_content(hd.dbc, first.arrangement_id)
+			arrangement_id = first.arrangement_id
+			first_arrangement_content = await db.get_arrangement_content(hd.dbc, arrangement_id)
 			production_arrangement_id_to_highlight = first.production_arrangement_id
 
 	production_content_div = html.build_left_arrangement_titles(arrangement_titles, 'load_arrangement', True, production_arrangement_id_to_highlight)
-	arrangement_content_div = html.detail_nested_content(first_arrangement_content, click_script, content_titler)
+	available_compositions = None
+	if include_available_compositions and arrangement_id:
+		available_compositions = await db.get_available_compositions(hd.dbc, arrangement_id)
+	arrangement_content_div = html.detail_nested_content(first_arrangement_content, click_script, content_titler, available_compositions)
 	await hd.ws.send_json({'task': 'set_production_and_arrangement_content', 'production_content': production_content_div, 'arrangement_content': arrangement_content_div})
 
 _announcement_path = lambda num: f"images/announcements/s - {str(num).rjust(2, '0')}.jpg"
 async def _ws_fetch_new_announcement(hd):
 	global g_announcement_id # TODO: use hd instead
-	#global g_announcements
 	path = _announcement_path(g_announcement_id)
 	if not path_exists('static/' + path): # TODO: improve! use pathstuffs!
 		g_announcement_id = 1 # start over
 		path = _announcement_path(g_announcement_id)
 	url = settings.k_static_url + path
-	#url = settings.k_static_url + f'announcements/{g_announcements[g_announcement_id]}'
 	g_announcement_id += 1
-	#g_announcement_id = (g_announcement_id + 1) % len(g_announcements)
 	await asyncio.gather(*[ws.send_json({'task': 'next_announcement', 'url': url}) for ws in hd.lpi.watchers])
 	
 
@@ -574,8 +622,8 @@ async def _relay_drive_actions(ws):
 
 # Etc.
 
-async def _set_up_common_view(view, dbc = True, uuid = True, data = True, re_log_in_seconds = None):
-	result = U.Struct(rq = view.request, session = await get_session(view.request))
+async def _set_up_common_get_post(request, dbc = True, uuid = True, data = True, re_log_in_seconds = None):
+	result = U.Struct(rq = request, session = await get_session(request))
 	if dbc:
 		result.dbc = result.rq.app['db'] # TODO: .cursor()
 	if uuid:
@@ -595,11 +643,11 @@ async def _set_up_common_view(view, dbc = True, uuid = True, data = True, re_log
 	result.session['after_login'] = str(result.rq.url) # come back here after logging in
 	raise web.HTTPFound(_gurl(result.rq, 'login'))
 
-async def _set_up_common_view_get(view, dbc = False, re_log_in_seconds = None):
-	return await _set_up_common_view(view, dbc, uuid = False, data = False, re_log_in_seconds = re_log_in_seconds)
+async def _set_up_common_get(request, dbc = False, re_log_in_seconds = None):
+	return await _set_up_common_get_post(request, dbc, uuid = False, data = False, re_log_in_seconds = re_log_in_seconds)
 
-async def _set_up_common_view_post(view, dbc = True, uuid = True, data = True, re_log_in_seconds = None):
-	return await _set_up_common_view(view, dbc, uuid = uuid, data = data, re_log_in_seconds = re_log_in_seconds)
+async def _set_up_common_post(request, dbc = True, uuid = True, data = True, re_log_in_seconds = None):
+	return await _set_up_common_get_post(request, dbc, uuid = uuid, data = data, re_log_in_seconds = re_log_in_seconds)
 
 
 # Init / Shutdown -------------------------------------------------------------

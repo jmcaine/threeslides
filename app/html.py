@@ -59,11 +59,18 @@ def select_song_arrangement(arrangements):
 	return d.render()
 
 
-def detail_nested_content(composition_content, click_script, content_titler, highlight_arrangement_composition_id = None):
-	return _detail_nested_content(composition_content, click_script, content_titler, highlight_arrangement_composition_id).render()
+def detail_nested_content(composition_content, click_script, content_titler, available_compositions, highlight_arrangement_composition_id = None):
+	return _detail_nested_content(composition_content, click_script, content_titler, available_compositions, highlight_arrangement_composition_id).render()
 
 def build_left_arrangement_titles(arrangement_titles, click_script, buttons, production_arrangement_id_to_highlight = None):
 	return _build_left_arrangement_titles(arrangement_titles, click_script, buttons, production_arrangement_id_to_highlight).render()
+
+def build_arrangement_filter_result_content(results):
+	d = t.div()
+	with d:
+		for r in results:
+			t.div(r['title'], onclick = f'add_arrangement({r["id"]})')
+	return d.render()
 
 def div_phrase(phrase):
 	result = t.div(cls = 'halo_content vcenter')
@@ -133,24 +140,22 @@ def watch(ws_url, data):
 
 	return d.render()
 
-def new_production(form, title, upcomings = None):
-	d = _doc(text.doc_prefix + f'Create New {title}', ('forms.css',))
+def edit_production(form, title, production = None, upcomings = None, templates = None):
+	d = _doc(text.doc_prefix + ('Edit ' if production else 'Create New ') + title, ('forms.css',))
 	with d:
-		if upcomings:
+		if upcomings and not production: # only show upcomings when "creating" a new production (to avoid accidental duplicate creations)
 			with t.fieldset():
 				t.legend('Edit an upcoming...')
 				with t.table():
 					for upcoming in upcomings:
-						dt = datetime.fromisoformat(upcoming['scheduled'])
-						fmt = '%a, %b %-d'
-						if dt.year != datetime.now().year:
-							fmt += ', %Y'
-						dts = dt.strftime(fmt)
-						with t.tr(cls = 'selectable_row', onclick = f"window.location.href='edit_{title.lower()}/{upcoming['id']}'"):
+						dts = _format_date_time(upcoming['scheduled'], False)
+						with t.tr(cls = 'selectable_row', onclick = f"window.location.href='/edit_production_arrangements/{upcoming['id']}'"):
 							t.td(upcoming['name'], align = 'right')
 							t.td('-- ' + dts)
 			t.p(t.b('Or...'))
-		_production_form(f'Create New {title}...', form, t.button('Create', type = 'submit'))
+	full_title = f'Edit {title}...' if production else f'Create New {title}...'
+	button_title = 'Save' if production else 'Create'
+	d.add(_production_form(full_title, form, t.button(button_title, type = 'submit'), False, production, templates))
 	return d.render()
 		
 
@@ -162,18 +167,23 @@ def new_production(form, title, upcomings = None):
 		title = _synthesize_title(a),
 	) for a in arrangements]
 '''
-def edit_production(ws_url, form, title, production, arrangement_titles, first_arrangement_content):
-	d = _doc(text.doc_prefix + f'Edit {title}', ('forms.css',))
+def edit_production_arrangements(ws_url, form, production, arrangement_titles, first_arrangement_content, available_compositions):
+	d = _doc(text.doc_prefix + f"Edit {production['name']}", ('forms.css',))
+	button = t.button('Edit', type = 'button', onclick = f"window.location.href='/edit_production/{production['id']}'")
 	with d:
 		with t.div(cls = 'full_screen'):
 			with t.div(cls = 'header'):
 				t.div('Header here...')
-			_production_form(f'Edit {title}...', form, t.button('Save Changes', type = 'submit'))
-			with t.div(cls = 'arrangements'): # cls 'main' in other contexts with 'left' and 'middle' panes
+			#_production_form('Details...', form, button, True, production, None) # -- this is too bulky, especially since it can't be scrolled off the screen (this is by design); so, simplify...
+			with t.div(cls = 'flexrow center40'):
+				t.div(t.b(f"{production['name']} - {_format_date_time(production['scheduled'])}", cls = 'rowitem'))
+				#t.button('Edit', type = 'button', cls = 'rowitem', onclick = f"window.location.href='/edit_production/{production['id']}'")
+				t.a('(Edit...)', href = f"/edit_production/{production['id']}")
+			with t.div(cls = 'arrangements center40'): # cls 'main' in other contexts with 'left' and 'middle' panes
 				with t.div(cls = 'left', id = 'production_content'):
 					_build_left_arrangement_titles(arrangement_titles, 'load_arrangement', True)
 				with t.div(cls = 'middle', id = 'arrangement_content'):
-					_detail_nested_content(first_arrangement_content, 'edit_phrase', _content_title_with_edits) # NOTE: we're sending an arrangement_content here, where a composition_content is actually asked for!  This turns out to work, because the two structs are so similar, but ought to think about fixing....  (can't simply send the first child (composition_content)!)
+					_detail_nested_content(first_arrangement_content, 'edit_phrase', _content_title_with_edits, available_compositions) # NOTE: we're sending an arrangement_content here, where a composition_content is actually asked for!  This turns out to work, because the two structs are so similar, but ought to think about fixing....  (can't simply send the first child (composition_content)!)
 			with t.div(cls = 'footer'):
 				t.div('Footer here...')
 
@@ -218,19 +228,36 @@ def _doc(title, css = None):
 
 _form = lambda form, div_id: t.form(id = div_id, action = form.action, method = 'post') # a normal "post" form
 
-def _production_form(legend, form, button):
+def _production_form(legend, form, button, read_only, production, templates):
 	result = _form(form, 'production')
 	with result:
 		with t.fieldset():
 			t.legend(legend)
 			fg = t.div(cls = 'formgrid')
 			with fg:
-				t.input_(id = 'name', name = 'name', type = 'text', required = 'true', autofocus = 'true')
+				args = {}
+				if read_only:
+					args = {'disabled': 'true'}
+				t.input_(**(args | {'id': 'name', 'name': 'name', 'type': 'text', 'required': 'true', 'autofocus': 'true', 'value': production['name'] if production else ''}))
 				t.label('Name', fr = 'name')
-				t.input_(id = 'date', name = 'date', type = 'date', required = 'true')
-				t.label('Scheduled Date', fr = 'name')
-				t.input_(id = 'time', name = 'time', type = 'time', value = '09:00')  #TODO: replace hardcode 9:00 with site-set default
-				t.label('Scheduled Time', fr = 'name')
+				dts = ''
+				if production:
+					dt = datetime.fromisoformat(production['scheduled'])
+					dts = dt.strftime('%Y-%m-%d')
+				t.input_(**(args | {'id': 'date', 'name': 'date', 'type': 'date', 'required': 'true', 'value': dts}))
+				t.label('Scheduled Date', fr = 'date')
+				tms = '09:00' #TODO: replace hardcode 9:00 with site-set default
+				if production:
+					tms = dt.strftime('%H:%M')
+				t.input_(**(args | {'id': 'time', 'name': 'time', 'type': 'time', 'value': tms}))
+				t.label('Scheduled Time', fr = 'time')
+				if not production:
+					# Select 'template':
+					if templates:
+						with t.select(id = 'template', name = 'template'):
+							for template in templates:
+								t.option(template['name'], value = template['id'])
+						t.label('Template', fr = 'template')
 			fg.add(button)
 	return result
 
@@ -249,21 +276,27 @@ def _arrangement_form(legend, form, button):
 			fg.add(button)
 	return result
 
-def _content_title(content, first):
+def _content_title(content, first, _available_compositions): # content options not used, but this function implements an interface; requires 3rd arg
 	if content.title:
 		# Abandonning the 'clickability' status of titles (like "verse 1") - it just confuses matters when live... so, no more: t.div(t.b(content.title), onclick = f'drive_live_composition_id("{content.composition_id}")', cls = 'buttonish')
 		t.div(t.b(content.title))
 
-def _content_title_with_edits(content, first):
-	if content.title:
+def _content_title_with_edits(content, first, available_compositions):
+	if content and content.title:
 		with t.div(cls = 'button_band'):
 			t.div(content.title, cls = 'text') # text first, here, before buttons
 			if not first:
 				acid = content.arrangement_composition_id
-				t.button('-', onclick = f'remove_composition({acid})')
-				t.button('+', cls = 'push', onclick = f'add_before_composition({acid})')
-				t.button('▲', onclick = f'move_composition_up({acid})')
-				t.button('▼', onclick = f'move_composition_down({acid})')
+				t.button('-', title = 'remove this block from the composition', onclick = f'remove_composition({acid})')
+				if available_compositions:
+					with t.div(cls = 'dropdown'):
+						did = f'add_composition_{acid}'
+						t.button('+', cls = 'push dropdown_button', title = 'insert content just in front of this block', onclick = f'show_dropdown_options("{did}")')
+						with t.div(id = did, cls = 'dropdown_content'):
+							for composition_title, composition_id in available_compositions:
+								t.div(composition_title, onclick = f'insert_composition_before({acid}, {composition_id})')
+				t.button('▲', title = 'move this block UP in the composition', onclick = f'move_composition_up({acid})')
+				t.button('▼', title = 'move this block DOWN in the composition', onclick = f'move_composition_down({acid})')
 
 def _build_left_arrangement_titles(arrangement_titles, click_script, buttons, production_arrangement_id_to_highlight = None):
 	#TODO: highlight and scroll-to production_arrangement_id_to_highlight!
@@ -277,12 +310,28 @@ def _build_left_arrangement_titles(arrangement_titles, click_script, buttons, pr
 					with t.div(cls = 'button_band'):
 						paid = title.production_arrangement_id
 						t.button('-', onclick = f'remove_arrangement({paid})')
-						t.button('+', cls = 'push', onclick = f'add_before_arrangement({paid})')
+						
+						with t.div(cls = 'dropdown'):
+							did = f'add_arrangement_{paid}'
+							t.button('+', cls = 'push dropdown_button', title = 'insert an arrangement just in front of this block', onclick = f'show_dropdown_options_with_filter("{did}", "{did}_filter", "{did}_filter_results")')
+							with t.div(id = did, cls = 'dropdown_content'):
+								t.input_(id = f'{did}_filter', type = 'text', onchange = f'filter_arrangements("{did}_filter_results", this.value)', onkeypress = 'this.onchange()', onpaste = 'this.onchange()', oninput = 'this.onchange()')
+								t.div(id = f'{did}_filter_results')
+						
 						t.button('▲', onclick = f'move_arrangement_up({paid})')
 						t.button('▼', onclick = f'move_arrangement_down({paid})')
 				t.div(title.title, cls = 'text') # text last, here, after buttons
 	return result
 
+
+def _format_date_time(dt, include_time = True):
+	dt = datetime.fromisoformat(dt)
+	fmt = '%a, %b %-d'
+	if dt.year != datetime.now().year:
+		fmt += ', %Y'
+	if include_time:
+		fmt += ' (%H:%M)'
+	return dt.strftime(fmt)
 
 '''
 composition_content:
@@ -292,23 +341,24 @@ composition_content:
 	phrases = await _get_phrases(dbc, arrangement['composition_id']), # may be empty list []!
 	children = [await get_composition_content(dbc, child['composition']) for child in await fetchall(dbc, ('select composition from arrangement_composition where arrangement = ? order by seq', (arrangement['arrangement_id'],)))],
 '''
-def _detail_nested_content(composition_content, click_script, content_titler, highlight_arrangement_composition_id = None, first = True):
+def _detail_nested_content(composition_content, click_script, content_titler, available_compositions = None, highlight_arrangement_composition_id = None, first = True):
 	result = t.div()
 	if hasattr(composition_content, 'arrangement_composition_id'): # first (hasattr) check is necessary because the first call in is often actually an arrangement_content, not a composition_content
 		if (first and highlight_arrangement_composition_id == None) or composition_content.arrangement_composition_id == highlight_arrangement_composition_id:
 			result = t.div(cls = 'highlighted', id = 'highlighted_composition')
-	with result:
-		content_titler(composition_content, first)
-		for phrase in composition_content.phrases:
-			# !!! phrase.phrase['display_scheme'] == 1 ?!
-			phrase_id = phrase.phrase['id']
-			div_id = f'phrase_{composition_content.arrangement_composition_id}_{phrase_id}'
-			with t.div(id = div_id, onclick = f'{click_script}("{div_id}", {phrase_id})', cls = 'buttonish'):
-				for content in phrase.content:
-					t.div(content['content'])
-			t.hr()
-		for child in composition_content.children:
-			t.div(_detail_nested_content(child, click_script, content_titler, highlight_arrangement_composition_id, False))
+	if composition_content:
+		with result:
+			content_titler(composition_content, first, available_compositions)
+			for phrase in composition_content.phrases:
+				# !!! phrase.phrase['display_scheme'] == 1 ?!
+				phrase_id = phrase.phrase['id']
+				div_id = f'phrase_{composition_content.arrangement_composition_id}_{phrase_id}'
+				with t.div(id = div_id, onclick = f'{click_script}("{div_id}", {phrase_id})', cls = 'buttonish'):
+					for content in phrase.content:
+						t.div(content['content'])
+				t.hr()
+			for child in composition_content.children:
+				t.div(_detail_nested_content(child, click_script, content_titler, available_compositions, highlight_arrangement_composition_id, False))
 	return result
 
 

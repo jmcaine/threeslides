@@ -20,7 +20,7 @@
 
 .header, .footer {
 	flex: 0 0 auto; /* set to NOT flex (within full-screen... */
-	height: 50px;
+	height: 30px;
 }
 .header {
 	display: flex; /* children will stack in a row */
@@ -29,3 +29,55 @@
 .header_item {
 	color: blue;
 }
+
+
+
+
+
+.dropdown { /* the container <div> - needed to position the dropdown content */
+	position: relative;
+	display: inline-block;
+}
+
+.dropdown_button { /* Class only used for finding, via event.target.matches(...) */
+}
+
+.dropdown_content { /* content within .dropdown is HIDDEN by Default */
+	display: none;
+	position: absolute;
+	background-color: #f1f1f1;
+	min-width: 60px; /* ?!!! */
+	box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+	z-index: 1;
+}
+
+/* TODO: Below: we want to deprecate the 'a', and use 'div' only... but currently there are still references to both within dropdown-content divs.... */
+/* Links inside the dropdown */
+.dropdown_content a {
+	color: black;
+	padding: 4px;
+	text-decoration: none;
+	display: block;
+}
+
+/* Change color of dropdown links on hover */
+.dropdown_content a:hover {background-color: #ddd}
+
+/* Links inside the dropdown */
+.dropdown_content div {
+	color: black;
+	padding: 4px;
+	text-decoration: none;
+	display: block;
+	cursor: pointer;
+}
+
+/* Change color of dropdown links on hover */
+.dropdown_content div:hover {background-color: #ddd}
+
+
+
+
+/* Show the dropdown menu (use JS to add this class to the .dropdown-content container when the user clicks on the dropdown button) */
+.show {display:block;}
+

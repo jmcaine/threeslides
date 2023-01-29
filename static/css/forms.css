@@ -146,19 +146,32 @@ input[type="time"] {
 }
 
 /* ------------------------------------------------------------- */
-/* The following is taken from the bottom half of driver.css... need to consolidate; the slight diff there is that the screen is a 100% with as-neede scrollbars in the individual flexboxes */
+/* The following is taken from the bottom half of driver.css... need to consolidate; the slight diff there is that the screen is a 100% with as-needed scrollbars in the individual flexboxes */
 
-.arrangements {
-	display: flex; /* left and right children will stack side-by-side (row) */
-	flex-flow: row nowrap;
-	overflow: hidden;
-
-	/*width: 100%;
-	max-width: 35em;*/
-	width: 35em;
+.center40 {
+	width: 40em;
 	padding: 4px;
 	margin: 0 auto; /*2em auto;*/
 	border: 0 none;
+}
+
+.flexrow {
+	display: flex; /* text and buttons will flow in a row; but watch out: '.flexrow div' probably doesn't want to apply to left and middle rows in .arrangements! */
+	flex-flow: row nowrap;
+	align-items: center;
+	overflow: hidden;
+	border-bottom: 1px dotted #888;
+}
+
+.flexrow div {
+	margin: 0.5em;
+}
+
+
+.arrangements { /* NOTE: currently the same as flexrow! */
+	display: flex; /* left and right children will stack side-by-side (row) */
+	flex-flow: row nowrap;
+	overflow: hidden;
 }
 
 .left {
@@ -205,21 +218,21 @@ input[type="time"] {
 
 /* ----------------------------------------------------------------- */
 
-.buttoned_header {
+.button_band {
 	width: 100%;
 	display: flex; /* text and buttons will flow in a row */
 	flex-flow: row;
 }
 
-.buttoned_header .text {
+.button_band .text {
 	margin: 1px;
 }
-.buttoned_header .text:hover {
+.button_band .text:hover {
 	cursor: pointer;
 	background-color: #abec8e;
 }
 
-.buttoned_header button {
+.button_band button {
 	margin: 1px;
 	padding: 1px 5px;
 	font-size: 1em;
@@ -228,9 +241,12 @@ input[type="time"] {
 	background-color: #7475b8;
 	border: 1px;
 	cursor: pointer;
+
+	border-style: solid;
+	box-shadow: none;
 }
 
-.buttoned_header .push {
+.button_band .push {
 	margin-left: auto;
 }
 
@@ -239,3 +255,4 @@ input[type="time"] {
 .highlighted {
   font-weight: bold;
 }
+
