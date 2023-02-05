@@ -10,11 +10,13 @@
 .two-col .left-thin {
 	width: 350px;
 	overflow-y: auto; /* show scrollbar when needed */
+	margin-left: 4em;
 }
 
 .two-col .right-rest {
 	flex: 1 1 auto;
 	overflow-y: auto; /* show scrollbar when needed */
+	margin-right: 4em;
 }
 
 
