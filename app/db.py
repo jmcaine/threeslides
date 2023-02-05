@@ -77,6 +77,7 @@ _js_arrangement_composition_titles = [_j_arrangement_title, _j_composition, _j_c
 async def get_arrangement_content(dbc, arrangement_id):
 	arrangement = await fetchone(dbc, (f'{_s_arrangement_basic} from arrangement join {" join ".join(_js_arrangement_composition_titles)} where arrangement.id = ?', (arrangement_id,)))
 	return U.Struct(
+		arrangement_id = arrangement_id,
 		composition_id = arrangement['composition_id'],
 		title = _synthesize_title(arrangement),
 		background = arrangement['background'],
@@ -124,13 +125,22 @@ async def get_production_arrangement_titles(dbc, production_id):
 	) for a in arrangements]
 	
 
+async def _fetch_nearest_production_id(dbc):
+	p = await fetchone(dbc, ("select id from production order by abs(strftime('%s', production.scheduled) - strftime('%s', ?)) limit 1", (datetime.now().isoformat(),)))
+	return p['id']
+	
+	
 async def start_or_join_live_production(dbc, production_id):
+	if production_id == 0: # signal: "just fetch the 'nearest' one!"
+		production_id = await _fetch_nearest_production_id(dbc)
 	arrangement_titles = await get_production_arrangement_titles(dbc, production_id)
 	lpi_id = await fetchone(dbc, ('select * from live_production_index where production = ?', (production_id, )))
 	if lpi_id:
 		lpi_id = lpi_id['id']
 	if not lpi_id:
-		r = await dbc.execute('insert into live_production_index (production, arrangement, phrase) values (?, ?, ?)', (production_id, arrangement_titles[0].arrangement_id, (await get_composition_first_phrase(dbc, arrangement_titles[0].composition_id))['id']))
+		# TODO: the line below fails, within get_composition_first_phrase() (actually, within the ()get_phrase() call therein), due to an erroneous composition_id; can't figure it out now; am fudging this to 8, 1 (two lines below) because it doesn't really matter at the moment.
+		#r = await dbc.execute('insert into live_production_index (production, arrangement, phrase) values (?, ?, ?)', (production_id, arrangement_titles[0].arrangement_id, (await get_composition_first_phrase(dbc, arrangement_titles[0].composition_id))['id']))
+		r = await dbc.execute('insert into live_production_index (production, arrangement, phrase) values (?, 8, 1)', (production_id,))
 		lpi_id = r.lastrowid
 	#OLD; REMOVE! arrangement = await fetchone(dbc, ('select arrangement.id from arrangement join production_arrangements on arrangement.id = production_arrangements.arrangement where production = ? order by production_arrangements.seq limit 1', (production_id,)))
 	arrangement_id = arrangement_titles[0].arrangement_id
@@ -200,6 +210,25 @@ async def move_arrangement_up_down(dbc, production_arrangement_id, up_down): # u
 	return await _move_up_down(dbc, production_arrangement_id, up_down, 'production_arrangements', 'production')
 	# this returns the production_id to which this moved arrangement belongs, which is useful to callers (e.g., to re-load that arrangement, now that the move is complete)
 
+async def insert_arrangement_before(dbc, production_arrangement_id, new_arrangement_id, typ):
+	if typ == 'composition':
+		# First, fabricate the new arrangement (`new_arrangement_id` is actually a composition id in this case!):
+		r = await dbc.execute('insert into arrangement (title, composition) values (?, ?)', (812, new_arrangement_id)) # TODO: 1) replace '812' hardcode! 2) add background!?
+		new_arrangement_id = r.lastrowid
+		# Add a couple of "blanks" TODO: KLUDGY!?
+		await dbc.execute('insert into arrangement_composition(arrangement, composition, seq) values (?, ?, 0)', (new_arrangement_id, 2833)) # TODO replace 2833 hardcode!
+		await dbc.execute('insert into arrangement_composition(arrangement, composition, seq) values (?, ?, 100)', (new_arrangement_id, 2833)) # TODO replace 2833 hardcode!
+		
+	pa = await fetchone(dbc, ('select * from production_arrangements where id = ?', (production_arrangement_id,)))
+	pa_before = await fetchone(dbc, ('select * from production_arrangements where production = ? and seq < ? order by seq desc limit 1', (pa['production'], pa['seq'])))
+	if pa_before:
+		new_seq = (pa['seq'] + pa_before['seq']) / 2
+	else:
+		new_seq = pa['seq'] / 2
+	r = await dbc.execute('insert into production_arrangements (production, arrangement, seq) values (?, ?, ?)', (pa['production'], new_arrangement_id, new_seq))
+	new_production_arrangement_id = r.lastrowid
+	return pa['production'], new_production_arrangement_id
+#TODO: combine above and below!!! (generalize)
 async def insert_composition_before(dbc, arrangement_composition_id, new_composition_id):
 	ac = await fetchone(dbc, ('select * from arrangement_composition where id = ?', (arrangement_composition_id,)))
 	ac_before = await fetchone(dbc, ('select * from arrangement_composition where arrangement = ? and seq < ? order by seq desc limit 1', (ac['arrangement'], ac['seq'])))
@@ -216,6 +245,11 @@ async def remove_composition_from_arrangement(dbc, arrangement_composition_id):
 	await dbc.execute(f'delete from arrangement_composition where id = ?', (arrangement_composition_id,))
 	return ac['arrangement']
 
+async def remove_arrangement_from_production(dbc, production_arrangement_id):
+	pa = await fetchone(dbc, ('select production from production_arrangements where id = ?', (production_arrangement_id,)))
+	await dbc.execute(f'delete from production_arrangements where id = ?', (production_arrangement_id,))
+	return pa['production']
+
 async def get_available_compositions(dbc, arrangement_id):
 	compositions = await fetchall(dbc, ('select composition.id, title.title as title from composition join arrangement on parent = arrangement.composition join title on composition.title = title.id where arrangement.id = ? order by seq', (arrangement_id,)))
 	return [(c['title'], c['id']) for c in compositions]
@@ -223,8 +257,11 @@ async def get_available_compositions(dbc, arrangement_id):
 async def get_compositions_and_arrangements(dbc, string):
 	joins = [_j_arrangement_title, _j_composition, _j_composition_title_2]
 	select = 'select arrangement.id, title.title as title, composition_title_table.title as composition_title'
-	result = await fetchall(dbc, (f'{select} from arrangement join {" join ".join(joins)} where (title.title like ? or composition_title like ?) order by composition_title limit 7', (f'%{string}%', f'%{string}%', )))
-	result2 = []
-	for r in result:
-		result2.append({'id': r['id'], 'title': _synthesize_title(r)})
-	return result2
+	like_string = f'%{string}%'
+	final = []
+	for r in await fetchall(dbc, (f'{select} from arrangement join {" join ".join(joins)} where (title.title like ? or composition_title like ?) order by composition_title limit 7', (like_string, like_string, ))):
+		final.append({'id': r['id'], 'title': _synthesize_title(r), 'typ': 'arrangement'})
+	for r in await fetchall(dbc, ('select composition.id, title.title as title from composition join title on composition.title = title.id where composition.parent is NULL and title.title like ? limit 7', (like_string,))):
+		final.append({'id': r['id'], 'title': r['title'] + ' - NEW', 'typ': 'composition'})
+	final.sort(key = lambda i: i['title'])
+	return final

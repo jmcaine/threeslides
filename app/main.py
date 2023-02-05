@@ -45,7 +45,7 @@ from . import util as U
 
 # Logging ---------------------------------------------------------------------
 
-logging.getLogger('aiosqlite').setLevel(logging.DEBUG)
+logging.getLogger('aiosqlite').setLevel(logging.CRITICAL)
 logging.getLogger('aiohttp').setLevel(logging.CRITICAL)
 logging.getLogger('aiohttp_session').setLevel(logging.CRITICAL)
 logging.getLogger('asyncio').setLevel(logging.CRITICAL)
@@ -220,14 +220,14 @@ async def detail_song_arrangement(rq):
 @rt.get('/drive/{production_id}')
 async def drive(rq):
 	#TODO: session = await get_session(rq)
-	lp = await _start_or_join_live_production(rq, rq.app['db'], rq.match_info['production_id'])
+	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
 	return hr(html.drive(_ws_url(rq), lp))
 
 
 @rt.get('/watch/{production_id}')
 async def watch(rq):
 	#TODO: session = await get_session(rq)
-	lp = await _start_or_join_live_production(rq, rq.app['db'], rq.match_info['production_id'])
+	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
 	return hr(html.watch(_ws_url(rq), lp))
 
 
@@ -546,18 +546,20 @@ async def _ws_edit(hd):
 			arrangement_id, new_arrangement_composition_id = await db.insert_composition_before(hd.dbc, int(hd.payload['arrangement_composition_id']), int(hd.payload['new_composition_id']))
 			await __send_arrangement_content(arrangement_id, new_arrangement_composition_id)
 		case 'remove_composition':
-			ac_id = int(hd.payload['arrangement_composition_id'])
-			arrangement_id = await db.remove_composition_from_arrangement(hd.dbc, ac_id)
+			arrangement_id = await db.remove_composition_from_arrangement(hd.dbc, hd.payload['arrangement_composition_id'])
 			await __send_arrangement_content(arrangement_id, None)
 
 		case 'filter_arrangements':
 			results = await db.get_compositions_and_arrangements(hd.dbc, hd.payload['strng'])
-			result_content = html.build_arrangement_filter_result_content(results)
+			result_content = html.build_arrangement_filter_result_content(results, hd.payload['before_production_arrangement_id'])
 			await hd.ws.send_json({'task': 'filter_arrangements_results', 'result_content': result_content, 'div_id': hd.payload['div_id']})
 
-
 		case 'insert_arrangement_before':
-			pass # TODO!!!
+			production_id, new_pa_id = await db.insert_arrangement_before(hd.dbc, hd.payload['production_arrangement_id'], hd.payload['new_arrangement_id'], hd.payload['typ'])
+			await _send_production_content(hd, production_id, 'edit_phrase', html._content_title_with_edits, True, new_pa_id)
+		case 'remove_arrangement':
+			production_id = await db.remove_arrangement_from_production(hd.dbc, hd.payload['production_arrangement_id'])
+			await _send_production_content(hd, production_id, 'edit_phrase', html._content_title_with_edits, True)
 
 		case 'move_arrangement_down':
 			await _move_arrangement_up_down(hd, 1)
@@ -577,23 +579,21 @@ async def _move_arrangement_up_down(hd, up_down):
 
 async def _send_production_content(hd, production_id, click_script, content_titler, include_available_compositions = False, production_arrangement_id_to_highlight = None):
 	arrangement_titles = await db.get_production_arrangement_titles(hd.dbc, production_id)
-	arrangement_id = None
 	if not arrangement_titles:
-		first_arrangement_content = []
+		arrangement_content = []
 	else:
 		if production_arrangement_id_to_highlight: 
-			first_arrangement_content = await db.get_production_arrangement_content(hd.dbc, production_arrangement_id_to_highlight)
+			arrangement_content = await db.get_production_arrangement_content(hd.dbc, production_arrangement_id_to_highlight)
 		else:
 			first = arrangement_titles[0] # just use the first arrangement in the production...
-			arrangement_id = first.arrangement_id
-			first_arrangement_content = await db.get_arrangement_content(hd.dbc, arrangement_id)
+			arrangement_content = await db.get_arrangement_content(hd.dbc, first.arrangement_id)
 			production_arrangement_id_to_highlight = first.production_arrangement_id
 
 	production_content_div = html.build_left_arrangement_titles(arrangement_titles, 'load_arrangement', True, production_arrangement_id_to_highlight)
 	available_compositions = None
-	if include_available_compositions and arrangement_id:
-		available_compositions = await db.get_available_compositions(hd.dbc, arrangement_id)
-	arrangement_content_div = html.detail_nested_content(first_arrangement_content, click_script, content_titler, available_compositions)
+	if include_available_compositions and arrangement_content:
+		available_compositions = await db.get_available_compositions(hd.dbc, arrangement_content.arrangement_id)
+	arrangement_content_div = html.detail_nested_content(arrangement_content, click_script, content_titler, available_compositions)
 	await hd.ws.send_json({'task': 'set_production_and_arrangement_content', 'production_content': production_content_div, 'arrangement_content': arrangement_content_div})
 
 _announcement_path = lambda num: f"images/announcements/s - {str(num).rjust(2, '0')}.jpg"

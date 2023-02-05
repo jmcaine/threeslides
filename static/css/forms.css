@@ -149,7 +149,7 @@ input[type="time"] {
 /* The following is taken from the bottom half of driver.css... need to consolidate; the slight diff there is that the screen is a 100% with as-needed scrollbars in the individual flexboxes */
 
 .center40 {
-	width: 40em;
+	width: 50em;
 	padding: 4px;
 	margin: 0 auto; /*2em auto;*/
 	border: 0 none;
@@ -221,16 +221,23 @@ input[type="time"] {
 .button_band {
 	width: 100%;
 	display: flex; /* text and buttons will flow in a row */
-	flex-flow: row;
+	flex-flow: row nowrap;
 }
 
 .button_band .text {
+	flex-shrink: 0;
 	margin: 1px;
 }
+.button_band input {
+	display: block;
+}
+
+/*
 .button_band .text:hover {
 	cursor: pointer;
 	background-color: #abec8e;
 }
+*/
 
 .button_band button {
 	margin: 1px;
@@ -241,7 +248,7 @@ input[type="time"] {
 	background-color: #7475b8;
 	border: 1px;
 	cursor: pointer;
-
+	
 	border-style: solid;
 	box-shadow: none;
 }
@@ -249,6 +256,7 @@ input[type="time"] {
 .button_band .push {
 	margin-left: auto;
 }
+
 
 /* ----------------------------------------------------------------- */
 

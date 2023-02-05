@@ -65,11 +65,11 @@ def detail_nested_content(composition_content, click_script, content_titler, ava
 def build_left_arrangement_titles(arrangement_titles, click_script, buttons, production_arrangement_id_to_highlight = None):
 	return _build_left_arrangement_titles(arrangement_titles, click_script, buttons, production_arrangement_id_to_highlight).render()
 
-def build_arrangement_filter_result_content(results):
+def build_arrangement_filter_result_content(results, before_production_arrangement_id):
 	d = t.div()
 	with d:
 		for r in results:
-			t.div(r['title'], onclick = f'add_arrangement({r["id"]})')
+			t.div(r['title'], onclick = f'''insert_arrangement_before({before_production_arrangement_id}, {r["id"]}, "{r['typ']}")''')
 	return d.render()
 
 def div_phrase(phrase):
@@ -276,7 +276,7 @@ def _arrangement_form(legend, form, button):
 			fg.add(button)
 	return result
 
-def _content_title(content, first, _available_compositions): # content options not used, but this function implements an interface; requires 3rd arg
+def _content_title(content, first, _): # 'available_compositions' not used, but this function implements an interface; requires 3rd arg
 	if content.title:
 		# Abandonning the 'clickability' status of titles (like "verse 1") - it just confuses matters when live... so, no more: t.div(t.b(content.title), onclick = f'drive_live_composition_id("{content.composition_id}")', cls = 'buttonish')
 		t.div(t.b(content.title))
@@ -288,13 +288,12 @@ def _content_title_with_edits(content, first, available_compositions):
 			if not first:
 				acid = content.arrangement_composition_id
 				t.button('-', title = 'remove this block from the composition', onclick = f'remove_composition({acid})')
-				if available_compositions:
-					with t.div(cls = 'dropdown'):
-						did = f'add_composition_{acid}'
-						t.button('+', cls = 'push dropdown_button', title = 'insert content just in front of this block', onclick = f'show_dropdown_options("{did}")')
-						with t.div(id = did, cls = 'dropdown_content'):
-							for composition_title, composition_id in available_compositions:
-								t.div(composition_title, onclick = f'insert_composition_before({acid}, {composition_id})')
+				with t.div(cls = 'dropdown'):
+					did = f'add_composition_{acid}'
+					t.button('+', cls = 'push dropdown_button', title = 'insert content just in front of this block', onclick = f'show_dropdown_options("{did}")')
+					with t.div(id = did, cls = 'dropdown_content'):
+						for composition_title, composition_id in available_compositions:
+							t.div(composition_title, onclick = f'insert_composition_before({acid}, {composition_id})')
 				t.button('▲', title = 'move this block UP in the composition', onclick = f'move_composition_up({acid})')
 				t.button('▼', title = 'move this block DOWN in the composition', onclick = f'move_composition_down({acid})')
 
@@ -304,20 +303,18 @@ def _build_left_arrangement_titles(arrangement_titles, click_script, buttons, pr
 	with result:
 		for title in arrangement_titles:
 			taid = title.arrangement_id
+			paid = title.production_arrangement_id
 			div_id = f'arrangement_{taid}'
 			with t.div(id = div_id, onclick = f'{click_script}("{div_id}", {taid})', cls = 'buttonish'):
 				if buttons:
 					with t.div(cls = 'button_band'):
-						paid = title.production_arrangement_id
 						t.button('-', onclick = f'remove_arrangement({paid})')
-						
 						with t.div(cls = 'dropdown'):
 							did = f'add_arrangement_{paid}'
-							t.button('+', cls = 'push dropdown_button', title = 'insert an arrangement just in front of this block', onclick = f'show_dropdown_options_with_filter("{did}", "{did}_filter", "{did}_filter_results")')
+							t.button('+', cls = 'dropdown_button', title = 'insert an arrangement just in front of this block', onclick = f'show_dropdown_options_with_filter("{did}", "{did}_filter", "{did}_filter_results", {paid})')
 							with t.div(id = did, cls = 'dropdown_content'):
-								t.input_(id = f'{did}_filter', type = 'text', onchange = f'filter_arrangements("{did}_filter_results", this.value)', onkeypress = 'this.onchange()', onpaste = 'this.onchange()', oninput = 'this.onchange()')
+								t.input_(id = f'{did}_filter', type = 'text', onchange = f'filter_arrangements("{did}_filter_results", this.value, {paid})', onkeypress = 'this.onchange()', onpaste = 'this.onchange()', oninput = 'this.onchange()')
 								t.div(id = f'{did}_filter_results')
-						
 						t.button('▲', onclick = f'move_arrangement_up({paid})')
 						t.button('▼', onclick = f'move_arrangement_down({paid})')
 				t.div(title.title, cls = 'text') # text last, here, after buttons

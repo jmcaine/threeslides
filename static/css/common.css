@@ -8,7 +8,7 @@
 }
 
 .two-col .left-thin {
-	width: 250px;
+	width: 350px;
 	overflow-y: auto; /* show scrollbar when needed */
 }
 
@@ -35,6 +35,7 @@
 
 
 .dropdown { /* the container <div> - needed to position the dropdown content */
+	width: 100%;
 	position: relative;
 	display: inline-block;
 }
@@ -46,7 +47,7 @@
 	display: none;
 	position: absolute;
 	background-color: #f1f1f1;
-	min-width: 60px; /* ?!!! */
+	min-width: 80px; /* ?!!! */
 	box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
 	z-index: 1;
 }

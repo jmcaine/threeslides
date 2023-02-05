@@ -37,22 +37,15 @@ function load_arrangement(div_id, arrangement_id) {
 	ws_send({task: "edit", action: "arrangement_id", arrangement_id: arrangement_id});
 }
 
-function insert_arrangement_before(production_arrangement_id, new_arrangement_id) {
-	ws_send({task: "edit", action: "insert_arrangement_before", production_arrangement_id: production_arrangement_id, new_arrangement_id: new_arrangement_id});
-}
-
-function insert_composition_before(arrangement_composition_id, new_composition_id) {
-	ws_send({task: "edit", action: "insert_composition_before", arrangement_composition_id: arrangement_composition_id, new_composition_id: new_composition_id});
-}
-
-function show_dropdown_options_with_filter(div_id, filter_div_id, filter_results_div_id) {
+function show_dropdown_options_with_filter(div_id, filter_div_id, filter_results_div_id, before_production_arrangement_id) {
+	_cancel_bubble();
 	$(div_id).classList.toggle("show");
 	$(filter_div_id).focus();
-	filter_arrangements(filter_results_div_id, "");
+	filter_arrangements(filter_results_div_id, "", before_production_arrangement_id);
 }
 
-function filter_arrangements(div_id, strng) {
-	ws_send({task: "edit", action: "filter_arrangements", div_id: div_id, strng: strng});
+function filter_arrangements(div_id, strng, before_production_arrangement_id) {
+	ws_send({task: "edit", action: "filter_arrangements", div_id: div_id, strng: strng, before_production_arrangement_id: before_production_arrangement_id});
 }
 
 function filter_arrangements_results(result_content, div_id) {
@@ -69,19 +62,43 @@ function set_arrangement_bg(bg) {
 	//TODO!
 }
 
+function _cancel_bubble() {
+	if (!e) var e = window.event;
+	e.cancelBubble = true;
+	if (e.stopPropagation) e.stopPropagation();
+}
+
+function insert_arrangement_before(production_arrangement_id, new_arrangement_id, typ) {
+	_cancel_bubble();
+	ws_send({task: "edit", action: "insert_arrangement_before", production_arrangement_id: production_arrangement_id, new_arrangement_id: new_arrangement_id, typ: typ});
+}
+function insert_composition_before(arrangement_composition_id, new_composition_id) {
+	_cancel_bubble();
+	ws_send({task: "edit", action: "insert_composition_before", arrangement_composition_id: arrangement_composition_id, new_composition_id: new_composition_id});
+}
+
 function move_composition_down(arrangement_composition_id) {
+	_cancel_bubble();
 	ws_send({task: "edit", action: "move_composition_down", arrangement_composition_id: arrangement_composition_id})
 }
 function move_composition_up(arrangement_composition_id) {
+	_cancel_bubble();
 	ws_send({task: "edit", action: "move_composition_up", arrangement_composition_id: arrangement_composition_id})
 }
 function remove_composition(arrangement_composition_id) {
+	_cancel_bubble();
 	ws_send({task: "edit", action: "remove_composition", arrangement_composition_id: arrangement_composition_id})
 }
 
 function move_arrangement_down(production_arrangement_id) {
+	_cancel_bubble();
 	ws_send({task: "edit", action: "move_arrangement_down", production_arrangement_id: production_arrangement_id})
 }
 function move_arrangement_up(production_arrangement_id) {
+	_cancel_bubble();
 	ws_send({task: "edit", action: "move_arrangement_up", production_arrangement_id: production_arrangement_id})
+}
+function remove_arrangement(production_arrangement_id) {
+	_cancel_bubble();
+	ws_send({task: "edit", action: "remove_arrangement", production_arrangement_id: production_arrangement_id})
 }
