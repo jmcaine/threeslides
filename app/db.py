@@ -247,7 +247,7 @@ async def remove_composition_from_arrangement(dbc, arrangement_composition_id):
 
 async def remove_arrangement_from_production(dbc, production_arrangement_id):
 	pa = await fetchone(dbc, ('select production from production_arrangements where id = ?', (production_arrangement_id,)))
-	await dbc.execute(f'delete from production_arrangements where id = ?', (production_arrangement_id,))
+	await dbc.execute('delete from production_arrangements where id = ?', (production_arrangement_id,))
 	return pa['production']
 
 async def get_available_compositions(dbc, arrangement_id):
@@ -280,3 +280,32 @@ async def get_background_movies(dbc, strng):
 async def set_background_image(dbc, arrangement_id, filename):
 	r = await dbc.execute(f'update arrangement set background = ? where id = ?', (filename, arrangement_id))
 	return r.rowcount == 1
+
+async def set_composition_content(dbc, composition_id, text):
+	# TODO: do this whole function as a transaction, which we can roll back if something goes wrong....
+	await dbc.execute('delete from phrase where composition = ?', (composition_id,)) # TODO: just MARK as deleted, in DB, instead, to make for easy "undo"
+	phrase_seq = 0
+	content_seq = 0
+	phrase_id = None
+	just_broke = False # blank-line singleton enforcer (subsequent blank lines will be ignored, rather than creating extra phrase records)
+	for line in text.strip().splitlines():
+		# Create new phrase (if no line (nothing left when stripped) or phrase_id is not yet set):
+		stripped_line = line.strip()
+		if not just_broke and (not stripped_line or not phrase_id):
+			phrase_seq += 1
+			r = await dbc.execute('insert into phrase (composition, seq, display_scheme) values (?, ?, ?)', (composition_id, phrase_seq, 1))
+			phrase_id = r.lastrowid
+			content_seq = 0
+			just_broke = True
+		# Add new line of content (even if created a new phrase, above; if stripped line is non-empty, then it needs to be added!)
+		if stripped_line:
+			just_broke = False
+			assert(phrase_id)
+			content_seq += 1
+			await dbc.execute('insert into content (phrase, content, seq) values (?, ?, ?)', (phrase_id, line, content_seq))
+	#!!!dbc.commit()
+	
+	return True # TODO: improve!
+
+async def get_flat_composition_content(dbc, composition_id):
+	return await _get_phrases(dbc, composition_id)

@@ -18,16 +18,14 @@ ws.onmessage = function(event) {
 		case "background_filter_results":
 			background_filter_results(payload.result_content);
 			break;
-		case "set_arrangement_bg":
-			set_arrangement_bg(payload.bg);
+		case "background_image_result":
+			background_image_result(payload.result);
 			break;
-		case "set_background_image_result":
-			if (payload.result) {
-				alert("background image set!"); //TODO: handle payload.result better....
-			} else {
-				alert("background image FAILED to set!");
-			}
-			hide_dialogs();
+		case "fetch_composition_content":
+			fetch_composition_content(payload.text);
+			break;
+		case "composition_content_result":
+			composition_content_result(payload.result);
 			break;
 		case "pong":
 			// good! TODO: do something about this(?), even though there's nothing more to do to complete the loop (we'll send the next ping according to a timer (below); no need to "send" anything now, in reply)
@@ -64,6 +62,19 @@ function show_available_content_div(arrangement_composition_id) {
 	_show_dialog($('available_content_div'));
 }
 
+var g_composition_under_edit = 0;
+function show_content_text_div(composition_id) {
+	g_composition_under_edit = composition_id;
+	ws_send({task: "edit", action: "fetch_composition_content", composition_id: composition_id});
+	// wait to show content_text_div until content is returned (composition_content_result())
+	// TODO: show spinner!?
+}
+function fetch_composition_content(text) {
+	$('composition_content_div').value = text;
+	_show_dialog($('content_text_div'));
+}
+
+
 var g_insertion_paid = 0;
 function show_arrangement_choice_filter(before_production_arrangement_id) {
 	_cancel_bubble();
@@ -77,10 +88,13 @@ function hide_dialogs() {
 	_hide_dialog($('available_arrangements_div'));
 	_hide_dialog($('available_content_div'));
 	_hide_dialog($('arrangement_details_div'));
+	_hide_dialog($('content_text_div'));
 }
-
 function hide_available_content_div() {
 	_hide_dialog($('available_content_div'));
+}
+function hide_content_text_div() {
+	_hide_dialog($('content_text_div'));
 }
 
 function filter_arrangements(strng) {
@@ -107,16 +121,18 @@ function background_filter_results(result_content) {
 }
 function set_bg_image(filename) {
 	ws_send({task: "edit", action: "set_bg_image", arrangement_id: g_arrangement_under_edit, filename: filename});
+	g_arrangement_under_edit = 0;
+}
+function background_image_result(result) {
+	if (result) {
+		//alert("background image set!"); //TODO: handle result better....
+	} else {
+		alert("background image FAILED to set!");
+	}
+	hide_dialogs();
 }
 
-function edit_composition(composition_id) {
-	_cancel_bubble();
-}
-
-function edit_phrase(div_id, phrase_id) {
-}
-function set_arrangement_bg(bg) {
-	//TODO!
+function noop(div_id, foo_id) {
 }
 
 function _cancel_bubble() {
@@ -127,15 +143,29 @@ function _cancel_bubble() {
 }
 
 function insert_arrangement_before(production_arrangement_id, new_arrangement_id, typ) { // TODO: get rid of production_arrangement_id, just use g_insertion_paid !!  - that's what we stored it for, ultimately!  (so, i.e., stop passing that paid through server and back again (in html.build_arrangement_filter_result_content)
-	_cancel_bubble();
+	//REMOVE!_cancel_bubble();
 	_hide_dialog($('available_arrangements_div')); // TODO: just show spinner, here, and and hide the dialog upon set_production_and_arrangement_content or set_arrangement_content callbacks?
 	ws_send({task: "edit", action: "insert_arrangement_before", production_arrangement_id: production_arrangement_id, new_arrangement_id: new_arrangement_id, typ: typ});
 }
 function insert_composition(new_composition_id) {
-	_cancel_bubble();
-	_hide_dialog($('available_content_div'));
+	//REMOVE!_cancel_bubble();
+	_hide_dialog($('available_content_div'));// TODO: just show spinner, here, and and hide the dialog upon set_production_and_arrangement_content or set_arrangement_content callbacks?
 	ws_send({task: "edit", action: "insert_composition_before", arrangement_composition_id: g_insertion_acid, new_composition_id: new_composition_id});
+	g_insertion_acid = 0; // protect; back to 0
 }
+
+function set_composition_content() {
+	_hide_dialog($('content_text_div'));// TODO: just show spinner, here, and and hide the dialog upon set_production_and_arrangement_content or set_arrangement_content callbacks?
+	ws_send({task: "edit", action: "set_composition_content", composition_id: g_composition_under_edit, text: $('composition_content_div').value});
+	g_composition_under_edit = 0; // protect; back to 0
+}
+function composition_content_result(result) {
+	if (!result) {
+		alert("composition content change FAILED!"); // TODO: handle better!
+	}
+	hide_content_text_div();
+}
+
 
 function move_composition_down(arrangement_composition_id) {
 	_cancel_bubble();

@@ -197,7 +197,7 @@ def edit_production_arrangements(ws_url, form, production, arrangement_titles, f
 				with t.div(cls = 'left highlight_container', id = 'production_content'):
 					_build_left_arrangement_titles(arrangement_titles, 'load_arrangement', True)
 				with t.div(cls = 'middle highlight_container', id = 'arrangement_content'):
-					_detail_nested_content(first_arrangement_content, 'edit_phrase', _content_title_with_edits, available_compositions) # NOTE: we're sending an arrangement_content here, where a composition_content is actually asked for!  This turns out to work, because the two structs are so similar, but ought to think about fixing....  (can't simply send the first child (composition_content)!)
+					_detail_nested_content(first_arrangement_content, 'noop', _content_title_with_edits, available_compositions) # NOTE: we're sending an arrangement_content here, where a composition_content is actually asked for!  This turns out to work, because the two structs are so similar, but ought to think about fixing....  (can't simply send the first child (composition_content)!)
 			with t.div(cls = 'footer'):
 				t.div('Footer here...')
 
@@ -301,7 +301,7 @@ def _content_title_with_edits(content, first, available_compositions):
 			t.div(content.title, cls = 'text') # text first, here, before buttons
 			if not first:
 				acid = content.arrangement_composition_id
-				t.button('...', title = 'edit this composition content', onclick = f'edit_composition({content.composition_id})')
+				t.button('...', title = 'edit this composition content', onclick = f'show_content_text_div({content.composition_id})')
 				t.button('-', cls = 'push', title = 'remove this block from the composition', onclick = f'remove_composition({acid})')
 				t.button('+', title = 'insert content just ABOVE of this block', onclick = f'show_available_content_div({acid})')
 				t.button('▲', title = 'move this block UP in the composition', onclick = f'move_composition_up({acid})')
@@ -371,6 +371,7 @@ def _detail_nested_content(composition_content, click_script, content_titler, av
 	# Set up big_focus_box for displaying composition section titles, for adding new composition sections (ONLY if _content_title_with_edits is the content titler, which will result in the '+' buttons for adding new content sections):
 	if first and available_compositions and content_titler == _content_title_with_edits: # `available_compositions` implies `content_titler == _content_title_with_edits`, but, just to be thorough... (alternately, just assert(content_titler == _content_title_with_edits) within!!! (TODO)
 		with result:
+			# Content chooser:
 			with t.div(id = 'available_content_div', cls = 'big_focus_box hide'):
 				with t.div(cls = 'button_band'):
 					t.div('Choose one...')
@@ -378,6 +379,14 @@ def _detail_nested_content(composition_content, click_script, content_titler, av
 				t.hr()
 				for composition_title, composition_id in available_compositions:
 					t.div(composition_title, cls = 'pointered', onclick = f'insert_composition({composition_id})')
+			# Content editor:
+			with t.div(id = 'content_text_div', cls = 'big_focus_box hide'):
+				with t.div(cls = 'button_band'):
+					t.div('Type content here...')
+					t.button('Cancel', cls = 'buttonish push', onclick = 'hide_content_text_div()')
+					t.button('Save', cls = 'buttonish push', onclick = 'set_composition_content()')
+				t.hr()
+				t.textarea(id = 'composition_content_div', cls = 'full_width_height')
 	# Render the content:
 	if composition_content:
 		with result:

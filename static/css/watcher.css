@@ -9,6 +9,8 @@ body {
 }
 body {
 	background-size: auto 100%;
+	background-repeat: no-repeat;
+	background-position: center center;
 	opacity: 1.0;
 	transition: background 1.0s linear;
 }

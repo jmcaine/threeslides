@@ -525,19 +525,9 @@ async def _ws_edit(hd):
 	#TODO: SEE TODO items in _ws_drive!
 	__send_arrangement_content = lambda a_id, ac_id: _send_arrangement_content(hd, a_id, 'edit_phrase', html._content_title_with_edits, True, ac_id)
 	match hd.payload['action']:
-		case 'phrase_id':
-			phrase = await db.get_phrase(hd.dbc, int(hd.payload['phrase_id']))
-		#case 'composition_id': # happens, e.g., when somebody clicks on "verse 3" ("header text", rather than clicking on the verse 3 "body")
-			#	phrase = await db.get_composition_first_phrase(hd.dbc, int(hd.payload['composition_id']))
 		case 'arrangement_id': # happens when somebody clicks on a new arrangement (title)
 			arrangement_id = int(hd.payload['arrangement_id'])
 			content = await __send_arrangement_content(arrangement_id, None)
-			# BG:
-			bg = settings.k_static_url + f'bgs/{content.background}'
-			await hd.ws.send_json({'task': 'set_arrangement_bg', 'bg': bg})
-			# Announcements TODO: kludgy!
-			if arrangement_id == 20: #TODO: remove HARDCODE!
-				pass#TODO
 		case 'move_composition_down':
 			await _move_composition_up_down(hd, 1)
 		case 'move_composition_up':
@@ -561,7 +551,21 @@ async def _ws_edit(hd):
 			await hd.ws.send_json({'task': 'background_filter_results', 'result_content': result_content})
 		case 'set_bg_image':
 			result = await db.set_background_image(hd.dbc, int(hd.payload['arrangement_id']), hd.payload['filename'])
-			await hd.ws.send_json({'task': 'set_background_image_result', 'result': result})
+			await hd.ws.send_json({'task': 'background_image_result', 'result': result})
+			
+		case 'set_composition_content':
+			result = await db.set_composition_content(hd.dbc, int(hd.payload['composition_id']), hd.payload['text'])
+			#!!!arrangement_id = int(hd.payload['arrangement_id'])
+			#!!!content = await __send_arrangement_content(arrangement_id, None)
+			await hd.ws.send_json({'task': 'composition_content_result', 'result': result})
+		case 'fetch_composition_content':
+			result = await db.get_flat_composition_content(hd.dbc, int(hd.payload['composition_id']))
+			text = ''
+			for phrase in result:
+				for contents in phrase.content:
+					text += contents['content'] + '\n'
+				text += '\n'
+			await hd.ws.send_json({'task': 'fetch_composition_content', 'text': text})
 
 		case 'insert_arrangement_before':
 			production_id, new_pa_id = await db.insert_arrangement_before(hd.dbc, hd.payload['production_arrangement_id'], hd.payload['new_arrangement_id'], hd.payload['typ'])
