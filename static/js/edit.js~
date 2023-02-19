@@ -27,7 +27,6 @@ ws.onmessage = function(event) {
 			} else {
 				alert("background image FAILED to set!");
 			}
-			hide_dialogs();
 			break;
 		case "pong":
 			// good! TODO: do something about this(?), even though there's nothing more to do to complete the loop (we'll send the next ping according to a timer (below); no need to "send" anything now, in reply)

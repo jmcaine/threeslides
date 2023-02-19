@@ -69,8 +69,21 @@ def build_arrangement_filter_result_content(results, before_production_arrangeme
 	d = t.div()
 	with d:
 		for r in results:
-			t.div(r['title'], onclick = f'''insert_arrangement_before({before_production_arrangement_id}, {r["id"]}, "{r['typ']}")''')
+			t.div(r['title'], cls = 'pointered', onclick = f'''insert_arrangement_before({before_production_arrangement_id}, {r["id"]}, "{r['typ']}")''')
 	return d.render()
+
+def build_background_filter_result_content(images, movies):
+	d = t.div(cls = 'thumbnails')
+	with d:
+		t.div('Images...')
+		for i in images:
+			t.div(t.img(src = settings.k_static_url + f'bgs/{i.filename}', width = 60), onclick = f'set_bg_image("{i.filename}")')
+		t.hr()
+		t.div('Movies:')
+		for m in movies:
+			pass#t.div(t.img(src = settings.k_static_url + f'bgs/{i.filename}'), onclick = 'set_bg_image({i.filename})')
+	return d.render()
+
 
 def div_phrase(phrase):
 	result = t.div(cls = 'halo_content vcenter')
@@ -101,9 +114,9 @@ def drive(ws_url, data):
 				#t.div('UNDO', cls = 'buttonish header_item', onclick = '');
 				#NEVER!(require attention to each) t.div('NEXT', cls = 'buttonish header_item', onclick = ''); # TODO: use data.lpi_id
 			with t.div(cls = 'two-col'):
-				with t.div(cls = 'left-thin', id = 'production_content'):
+				with t.div(cls = 'left-thin highlight_container', id = 'production_content'):
 					_build_left_arrangement_titles(data.arrangement_titles, 'drive_arrangement', False)
-				with t.div(cls = 'right-rest', id = 'arrangement_content'):
+				with t.div(cls = 'right-rest highlight_container', id = 'arrangement_content'):
 					_detail_nested_content(data.first_arrangement_content, 'drive_live_phrase', _content_title)
 			with t.div(cls = 'footer'):
 				t.div('Footer here...')
@@ -171,6 +184,7 @@ def edit_production_arrangements(ws_url, form, production, arrangement_titles, f
 	d = _doc(text.doc_prefix + f"Edit {production['name']}", ('forms.css',))
 	button = t.button('Edit', type = 'button', onclick = f"window.location.href='/edit_production/{production['id']}'")
 	with d:
+		t.div(cls = 'gray_screen hide', id = 'gray_screen_div', onclick = 'hide_dialogs()') # invisible at first; for big_focus_box dialog-box, later..
 		with t.div(cls = 'full_screen'):
 			with t.div(cls = 'header'):
 				t.div('Header here...')
@@ -180,9 +194,9 @@ def edit_production_arrangements(ws_url, form, production, arrangement_titles, f
 				#t.button('Edit', type = 'button', cls = 'rowitem', onclick = f"window.location.href='/edit_production/{production['id']}'")
 				t.a('(Edit...)', href = f"/edit_production/{production['id']}")
 			with t.div(cls = 'arrangements center40'): # cls 'main' in other contexts with 'left' and 'middle' panes
-				with t.div(cls = 'left', id = 'production_content'):
+				with t.div(cls = 'left highlight_container', id = 'production_content'):
 					_build_left_arrangement_titles(arrangement_titles, 'load_arrangement', True)
-				with t.div(cls = 'middle', id = 'arrangement_content'):
+				with t.div(cls = 'middle highlight_container', id = 'arrangement_content'):
 					_detail_nested_content(first_arrangement_content, 'edit_phrase', _content_title_with_edits, available_compositions) # NOTE: we're sending an arrangement_content here, where a composition_content is actually asked for!  This turns out to work, because the two structs are so similar, but ought to think about fixing....  (can't simply send the first child (composition_content)!)
 			with t.div(cls = 'footer'):
 				t.div('Footer here...')
@@ -287,36 +301,46 @@ def _content_title_with_edits(content, first, available_compositions):
 			t.div(content.title, cls = 'text') # text first, here, before buttons
 			if not first:
 				acid = content.arrangement_composition_id
-				t.button('-', title = 'remove this block from the composition', onclick = f'remove_composition({acid})')
-				with t.div(cls = 'dropdown'):
-					did = f'add_composition_{acid}'
-					t.button('+', cls = 'push dropdown_button', title = 'insert content just in front of this block', onclick = f'show_dropdown_options("{did}")')
-					with t.div(id = did, cls = 'dropdown_content'):
-						for composition_title, composition_id in available_compositions:
-							t.div(composition_title, onclick = f'insert_composition_before({acid}, {composition_id})')
+				t.button('...', title = 'edit this composition content', onclick = f'edit_composition({content.composition_id})')
+				t.button('-', cls = 'push', title = 'remove this block from the composition', onclick = f'remove_composition({acid})')
+				t.button('+', title = 'insert content just ABOVE of this block', onclick = f'show_available_content_div({acid})')
 				t.button('▲', title = 'move this block UP in the composition', onclick = f'move_composition_up({acid})')
 				t.button('▼', title = 'move this block DOWN in the composition', onclick = f'move_composition_down({acid})')
+
+def _filter_field(input_name, placeholder, onchange):
+	result = t.div()
+	with result:
+		t.label('Filter: ', cls = 'float_left', fr = input_name)
+		t.input_(type = 'text', id = input_name, name = input_name, cls = 'float_left', placeholder = placeholder, onchange = onchange, onkeypress = 'this.onchange()', onpaste = 'this.onchange()', oninput = 'this.onchange()')
+		t.button('Cancel', cls = 'buttonish float_right', onclick = 'hide_dialogs()')
+		t.hr(cls = 'clear_both')
+	return result
 
 def _build_left_arrangement_titles(arrangement_titles, click_script, buttons, production_arrangement_id_to_highlight = None):
 	#TODO: highlight and scroll-to production_arrangement_id_to_highlight!
 	result = t.div()
 	with result:
+		with t.div(id = 'arrangement_details_div', cls = 'big_focus_box hide'):
+			_filter_field('background_filter_div', 'start typing search terms here...', 'filter_backgrounds(this.value)')
+			t.div(id = 'background_filter_results_div')
+		with t.div(id = 'available_arrangements_div', cls = 'big_focus_box hide'):
+			_filter_field('arrangement_filter_div', 'start typing title here...', 'filter_arrangements(this.value)')
+			t.div(id = 'arrangement_filter_results_div')
 		for title in arrangement_titles:
-			taid = title.arrangement_id
+			aid = title.arrangement_id
 			paid = title.production_arrangement_id
-			div_id = f'arrangement_{taid}'
-			with t.div(id = div_id, onclick = f'{click_script}("{div_id}", {taid})', cls = 'buttonish'):
+			div_id = f'arrangement_{aid}'
+			cls = 'buttonish'
+			if paid == production_arrangement_id_to_highlight:
+				cls += ' highlighted'
+			with t.div(id = div_id, onclick = f'{click_script}("{div_id}", {aid})', cls = cls):
 				if buttons:
 					with t.div(cls = 'button_band'):
-						t.button('-', onclick = f'remove_arrangement({paid})')
-						with t.div(cls = 'dropdown'):
-							did = f'add_arrangement_{paid}'
-							t.button('+', cls = 'dropdown_button', title = 'insert an arrangement just in front of this block', onclick = f'show_dropdown_options_with_filter("{did}", "{did}_filter", "{did}_filter_results", {paid})')
-							with t.div(id = did, cls = 'dropdown_content'):
-								t.input_(id = f'{did}_filter', type = 'text', onchange = f'filter_arrangements("{did}_filter_results", this.value, {paid})', onkeypress = 'this.onchange()', onpaste = 'this.onchange()', oninput = 'this.onchange()')
-								t.div(id = f'{did}_filter_results')
-						t.button('▲', onclick = f'move_arrangement_up({paid})')
-						t.button('▼', onclick = f'move_arrangement_down({paid})')
+						t.button('...', title = "edit this arrangement's settings (background, etc.)", onclick = f'edit_arrangement({aid})')
+						t.button('-', cls = 'push', title = 'remove arrangement from this lineup', onclick = f'remove_arrangement({paid})')
+						t.button('+', title = 'insert an arrangement just ABOVE of this arrangement', onclick = f'show_arrangement_choice_filter({paid})')
+						t.button('▲', title = 'move arrangement up one', onclick = f'move_arrangement_up({paid})')
+						t.button('▼', title = 'move arrangement down one', onclick = f'move_arrangement_down({paid})')
 				t.div(title.title, cls = 'text') # text last, here, after buttons
 	return result
 
@@ -340,9 +364,21 @@ composition_content:
 '''
 def _detail_nested_content(composition_content, click_script, content_titler, available_compositions = None, highlight_arrangement_composition_id = None, first = True):
 	result = t.div()
+	# Set the "highlighted" content:
 	if hasattr(composition_content, 'arrangement_composition_id'): # first (hasattr) check is necessary because the first call in is often actually an arrangement_content, not a composition_content
 		if (first and highlight_arrangement_composition_id == None) or composition_content.arrangement_composition_id == highlight_arrangement_composition_id:
-			result = t.div(cls = 'highlighted', id = 'highlighted_composition')
+			result = t.div(cls = 'highlighted')
+	# Set up big_focus_box for displaying composition section titles, for adding new composition sections (ONLY if _content_title_with_edits is the content titler, which will result in the '+' buttons for adding new content sections):
+	if first and available_compositions and content_titler == _content_title_with_edits: # `available_compositions` implies `content_titler == _content_title_with_edits`, but, just to be thorough... (alternately, just assert(content_titler == _content_title_with_edits) within!!! (TODO)
+		with result:
+			with t.div(id = 'available_content_div', cls = 'big_focus_box hide'):
+				with t.div(cls = 'button_band'):
+					t.div('Choose one...')
+					t.button('Cancel', cls = 'buttonish push', onclick = 'hide_available_content_div()')
+				t.hr()
+				for composition_title, composition_id in available_compositions:
+					t.div(composition_title, cls = 'pointered', onclick = f'insert_composition({composition_id})')
+	# Render the content:
 	if composition_content:
 		with result:
 			content_titler(composition_content, first, available_compositions)

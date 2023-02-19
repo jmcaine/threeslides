@@ -55,7 +55,6 @@ function choose_dropdown_option_DEPRECATE(key, option_id, option_title, button_i
 };
 
 // Close the dropdown menu if the user clicks outside of it
-/* DEPRECATE - not using dropdowns any more...
 onclick = function(event) {
 	if (!event.target.matches('.dropdown_button')) {
 		let dropdowns = document.getElementsByClassName("dropdown_content");
@@ -67,5 +66,4 @@ onclick = function(event) {
 		}
 	}
 };
-*/
-
+	

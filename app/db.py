@@ -254,10 +254,10 @@ async def get_available_compositions(dbc, arrangement_id):
 	compositions = await fetchall(dbc, ('select composition.id, title.title as title from composition join arrangement on parent = arrangement.composition join title on composition.title = title.id where arrangement.id = ? order by seq', (arrangement_id,)))
 	return [(c['title'], c['id']) for c in compositions]
 
-async def get_compositions_and_arrangements(dbc, string):
+async def get_compositions_and_arrangements(dbc, strng):
 	joins = [_j_arrangement_title, _j_composition, _j_composition_title_2]
 	select = 'select arrangement.id, title.title as title, composition_title_table.title as composition_title'
-	like_string = f'%{string}%'
+	like_string = f'%{strng}%'
 	final = []
 	for r in await fetchall(dbc, (f'{select} from arrangement join {" join ".join(joins)} where (title.title like ? or composition_title like ?) order by composition_title limit 7', (like_string, like_string, ))):
 		final.append({'id': r['id'], 'title': _synthesize_title(r), 'typ': 'arrangement'})
@@ -265,3 +265,18 @@ async def get_compositions_and_arrangements(dbc, string):
 		final.append({'id': r['id'], 'title': r['title'] + ' - NEW', 'typ': 'composition'})
 	final.sort(key = lambda i: i['title'])
 	return final
+
+from os import listdir, getcwd
+from os.path import isfile, join
+async def get_background_images(dbc, strng):
+	path = join(getcwd(), 'static', 'bgs')
+	return [U.Struct(
+		filename = f,
+	) for f in listdir(path) if isfile(join(path, f))]
+
+async def get_background_movies(dbc, strng):
+	return []
+
+async def set_background_image(dbc, arrangement_id, filename):
+	r = await dbc.execute(f'update arrangement set background = ? where id = ?', (filename, arrangement_id))
+	return r.rowcount == 1

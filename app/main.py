@@ -552,7 +552,16 @@ async def _ws_edit(hd):
 		case 'filter_arrangements':
 			results = await db.get_compositions_and_arrangements(hd.dbc, hd.payload['strng'])
 			result_content = html.build_arrangement_filter_result_content(results, hd.payload['before_production_arrangement_id'])
-			await hd.ws.send_json({'task': 'filter_arrangements_results', 'result_content': result_content, 'div_id': hd.payload['div_id']})
+			await hd.ws.send_json({'task': 'arrangement_filter_results', 'result_content': result_content})
+
+		case 'filter_backgrounds':
+			images = await db.get_background_images(hd.dbc, hd.payload['strng'])
+			movies = await db.get_background_movies(hd.dbc, hd.payload['strng'])
+			result_content = html.build_background_filter_result_content(images, movies)
+			await hd.ws.send_json({'task': 'background_filter_results', 'result_content': result_content})
+		case 'set_bg_image':
+			result = await db.set_background_image(hd.dbc, int(hd.payload['arrangement_id']), hd.payload['filename'])
+			await hd.ws.send_json({'task': 'set_background_image_result', 'result': result})
 
 		case 'insert_arrangement_before':
 			production_id, new_pa_id = await db.insert_arrangement_before(hd.dbc, hd.payload['production_arrangement_id'], hd.payload['new_arrangement_id'], hd.payload['typ'])

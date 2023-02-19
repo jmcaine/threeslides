@@ -24,7 +24,7 @@ body {
 
 .live, .highlighted {
 	/* background-color: #ee0000; */
-	background-color: #859e7c; /* just a touch beyond .buttonish:hover */
+	background-color: #279700; /* just a touch beyond .buttonish:hover */
 	font-weight: bold;
 }
 
