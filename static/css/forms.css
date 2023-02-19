@@ -310,3 +310,14 @@ input[type="time"] {
 .thumbnails div {
 	margin: 1px
 }
+
+/*
+.text_content_lines {
+	display: flex;
+	flex-flow: column;
+	justify-content: space-between;
+}
+.text_content_lines div {
+	margin: 1px
+}
+*/
