@@ -22,10 +22,12 @@ ws.onmessage = function(event) {
 			clear();
 			break;
 		case "bg":
-			set_background(payload.bg);
+			if (!g_show_hidden) {
+				set_background(payload.bg);
+			} // else, leave bg white (high-contrast)
 			break;
 		case "init":
-			ws_send({task: "init", lpi_id: lpi_id}); // lpi_id was set at top of scripts, upon crafting initial page, and now needs to be sent ('back') to ws handler
+			ws_send({task: "init", lpi_id: g_lpi_id}); // lpi_id was set at top of scripts, upon crafting initial page, and now needs to be sent ('back') to ws handler
 			ws_send({task: "add_watcher"});
 			break;
 		case "start_announcements":
@@ -59,6 +61,7 @@ function clear() {
 }
 
 function set_background(bg) {
+	//$(bg).src = bg;
 	document.body.style.backgroundImage = "url('" + bg + "')";
 }
 
@@ -118,5 +121,22 @@ function set_live_content(display_scheme, content, bg) {
 			g_dual_frame == false;
 		}
 	}
+	/*
+	if (!g_show_hidden) {
+		const chord_lines = userList.querySelectorAll(".content_chord");
+		highlightedItems.forEach((item) => {
+			item.classList.add('hide');
+		});
+		const chord_lines = userList.querySelectorAll(".vcenter");
+		highlightedItems.forEach((item) => {
+			item.classList.add('halo_content');
+		});
+	} else {
+		const chord_lines = userList.querySelectorAll(".vcenter");
+		highlightedItems.forEach((item) => {
+			item.classList.add('preformatted_content');
+		});
+	}
+	*/
 };
 

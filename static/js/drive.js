@@ -18,7 +18,7 @@ ws.onmessage = function(event) {
 			update_live_arrangement_id(payload.arrangement_id, payload.arrangement_content);
 			break;
 		case "init":
-			ws_send({task: "init", lpi_id: lpi_id}); // lpi_id was set at top of scripts, upon crafting initial page, and now needs to be sent ('back') to ws handler
+			ws_send({task: "init", lpi_id: g_lpi_id}); // lpi_id was set at top of scripts, upon crafting initial page, and now needs to be sent ('back') to ws handler
 			ws_send({task: "add_driver"});
 			break;
 		case "pong":

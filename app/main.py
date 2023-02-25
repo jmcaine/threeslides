@@ -220,15 +220,20 @@ async def detail_song_arrangement(rq):
 @rt.get('/drive/{production_id}')
 async def drive(rq):
 	#TODO: session = await get_session(rq)
+	
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
 	return hr(html.drive(_ws_url(rq), lp))
 
 
 @rt.get('/watch/{production_id}')
 async def watch(rq):
-	#TODO: session = await get_session(rq)
+	show_hidden = bool(rq.query.get('show_hidden', False))
+	l.debug(f"RQ:      show_hidden: {show_hidden}")
+	session = await get_session(rq)
+	session['config'] = {'show_hidden': show_hidden}
+	l.debug(f"SESSION: show_hidden: {session['config']['show_hidden']}")
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
-	return hr(html.watch(_ws_url(rq), lp))
+	return hr(html.watch(_ws_url(rq), lp, show_hidden))
 
 
 # ------------------------
@@ -342,6 +347,9 @@ async def ws(rq):
 	await ws.prepare(rq)
 	session = await get_session(rq)
 
+	if session.get('config'): #TODO (remove)
+		l.debug(f"WS:     show_hidden: {session['config']['show_hidden']}")
+
 	handlers = {
 		'init': _ws_init,
 		'ping': _ws_ping_pong,
@@ -384,7 +392,8 @@ async def ws(rq):
 		l.error('Exception processing WS messages; shutting down WS...')
 
 	if hasattr(hd, 'lpi'):
-		hd.lpi.watchers.discard(ws)
+		#TODO!NEED to match on predicate (can't figure out how), on lpi.watchers... lpi.watchers is now a UStruct -- hd.lpi.watchers.discard(ws)
+		#TODO: instead of any of this, we could just always react upon ws_send-broadcasting messages; if the send fails (b/c the ws is closed), then delete it from our set then...?
 		hd.lpi.drivers.discard(ws)
 	l.debug('websocket connection closed (ws_drive)')
 	return ws
@@ -407,7 +416,8 @@ async def _ws_init(hd):
 		hd.lpi = hd.rq.app['lps'][hd.lpi_id]
 
 async def _ws_add_watcher(hd):
-	hd.lpi.watchers.add(hd.ws)
+	hd.lpi.watchers.add(U.Struct(ws = hd.ws, config = hd.session['config']))
+
 
 async def _ws_add_driver(hd):
 	l.debug('added driver!')
@@ -453,7 +463,7 @@ async def _ws_drive(hd):
 	phrase = None
 	match hd.payload['action']:
 		case 'clear':
-			await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers])
+			await asyncio.gather(*[watcher.ws.send_json({'task': 'clear'}) for watcher in hd.lpi.watchers])
 		case 'live_phrase_id':
 			phrase_id = int(hd.payload['phrase_id'])
 			phrase = await db.get_phrase(hd.dbc, phrase_id)
@@ -479,19 +489,20 @@ async def _ws_drive(hd):
 async def _send_phrase_to_watchers(hd, phrase):
 	if phrase.content[0]['content'].endswith('.jpg'): # TODO: KLUDGY
 		image = settings.k_static_url + f"images/{phrase.content[0]['content']}"
-		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers])
-		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': image}) for ws in hd.lpi.watchers])
+		await asyncio.gather(*[watcher.ws.send_json({'task': 'clear'}) for watcher in hd.lpi.watchers])
+		await asyncio.gather(*[watcher.ws.send_json({'task': 'bg', 'bg': image}) for watcher in hd.lpi.watchers]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
 	else:
-		phrase_div = html.div_phrase(phrase)
-		# TODO: check now, after that DB lookup, to see if there are more drive messages on the pipe?  Then abandon the dispersal until new drive message(s) are folded in?
-			
-		await asyncio.gather(*[ws.send_json({
-			'task': 'set_live_content', 
-			'display_scheme': phrase.phrase['display_scheme'],
-			'content': phrase_div,
-			#TODO: 'bg': bg,
-		}) for ws in hd.lpi.watchers])
-		# TODO: separate "royal watchers" from plebians
+		sends = []
+		for watcher in hd.lpi.watchers: # TODO: separate "royal watchers" from plebians?
+			sends.append(watcher.ws.send_json({
+				'task': 'set_live_content', 
+				'display_scheme': phrase.phrase['display_scheme'],
+				'content': html.div_phrase(watcher.config, phrase), # would be more efficient to call this just once (or once per config?!), but that's just it: the number of possibilities for different views on this, based on configs, could be ridiculous; might-as-well just construct each for each watcher
+				#TODO: 'bg': bg,
+			}))
+			# TODO: check now, after each, to see if there are more drive messages on the pipe that might just render these null and void?  Then abandon the dispersal until new drive message(s) are folded in?
+		await asyncio.gather(*sends)
+		
 
 async def _send_new_live_phrase_id_to_other_drivers(hd, div_id):
 	await asyncio.gather(*[ws.send_json({
@@ -508,17 +519,17 @@ async def _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, conten
 	}) for ws in hd.lpi.drivers if ws != hd.ws])
 
 async def _send_new_bg_to_watchers(hd, background):
-	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers])
+	await asyncio.gather(*[watcher.ws.send_json({'task': 'clear'}) for watcher in hd.lpi.watchers])
 	bg = settings.k_static_url + f'bgs/{background}'
-	await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': bg}) for ws in hd.lpi.watchers])
+	await asyncio.gather(*[watcher.ws.send_json({'task': 'bg', 'bg': bg}) for watcher in hd.lpi.watchers])
 
 async def _handle_announcements_arrangement(hd, arrangement_id):
 	# Announcements TODO: kludgy!
 	if arrangement_id == 20: #TODO: remove HARDCODE!
-		await asyncio.gather(*[ws.send_json({'task': 'start_announcements'}) for ws in hd.lpi.watchers])
+		await asyncio.gather(*[watcher.ws.send_json({'task': 'start_announcements'}) for watcher in hd.lpi.watchers])
 		return True #TODO: kludgy!
 	else:
-		await asyncio.gather(*[ws.send_json({'task': 'stop_announcements'}) for ws in hd.lpi.watchers])
+		await asyncio.gather(*[watcher.ws.send_json({'task': 'stop_announcements'}) for watcher in hd.lpi.watchers])
 		return False #TODO: kludgy!
 
 async def _ws_edit(hd):
@@ -618,7 +629,7 @@ async def _ws_fetch_new_announcement(hd):
 		path = _announcement_path(g_announcement_id)
 	url = settings.k_static_url + path
 	g_announcement_id += 1
-	await asyncio.gather(*[ws.send_json({'task': 'next_announcement', 'url': url}) for ws in hd.lpi.watchers])
+	await asyncio.gather(*[watcher.ws.send_json({'task': 'next_announcement', 'url': url}) for watcher in hd.lpi.watchers])
 	
 
 '''
@@ -686,8 +697,8 @@ async def _shutdown(app):
 	if 'db' in app:
 		await app['db'].close()
 	for lpi, lp in app['lps'].items():
-		for ws in lp.watchers:
-			await ws.close()
+		for watcher in lp.watchers:
+			await watcher.ws.close()
 	l.info('...shutdown complete')
 
 

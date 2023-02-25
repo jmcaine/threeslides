@@ -85,12 +85,20 @@ def build_background_filter_result_content(images, movies):
 	return d.render()
 
 
-def div_phrase(phrase):
-	result = t.div(cls = 'halo_content vcenter')
+def div_phrase(config, phrase):
+	result = t.div(cls = 'halo_content vcenter') if not config['show_hidden'] else t.div(cls = 'preformatted_content vcenter') # show as monospace+preformatted if we're showing chords
 	if phrase:
 		with result:
 			for content in phrase.content:
-				t.div(content['content'])
+				content_text = content['content']
+				cls = 'content_text'
+				if content_text.startswith('[') and content_text.endswith(']'): # chord line
+					if not config['show_hidden']:
+						continue # skip this (chord) line
+					#else:
+					content_text = content_text.replace('[', ' ').strip(']') # replace '[' with ' ' to keep the spacing right; just strip off the ']' on the end
+					cls = 'content_chord'
+				t.div(content_text, cls = cls)
 	return result.render()
 
 
@@ -103,7 +111,8 @@ def detail_song(song):
 
 
 _js_ws = lambda ws_url: raw(f'var ws = new WebSocket("{ws_url}");')
-_js_lpi = lambda lpi_id: raw(f'var lpi_id = {lpi_id}')
+_js_lpi = lambda lpi_id: raw(f'var g_lpi_id = {lpi_id}')
+_js_show_hidden = lambda show_hidden: raw(f'var g_show_hidden = {"true" if show_hidden else "false"}')
 
 def drive(ws_url, data):
 	d = _doc(text.doc_prefix + f'Drive {data.production["name"]}', ('common.css', 'driver.css'))
@@ -132,7 +141,7 @@ def drive(ws_url, data):
 	return d.render()
 
 
-def watch(ws_url, data):
+def watch(ws_url, data, show_hidden):
 	d = _doc(text.doc_prefix + f'Watch {data.production["name"]}', ('watcher.css',))
 	with d:
 		with t.body():
@@ -149,6 +158,7 @@ def watch(ws_url, data):
 
 		t.script(_js_ws(ws_url))
 		t.script(_js_lpi(data.lpi_id))
+		t.script(_js_show_hidden(show_hidden))
 		add_scripts(('basic.js', 'ws.js', 'watch.js'))
 
 	return d.render()
