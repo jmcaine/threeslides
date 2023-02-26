@@ -228,10 +228,8 @@ async def drive(rq):
 @rt.get('/watch/{production_id}')
 async def watch(rq):
 	show_hidden = bool(rq.query.get('show_hidden', False))
-	l.debug(f"RQ:      show_hidden: {show_hidden}")
 	session = await get_session(rq)
 	session['config'] = {'show_hidden': show_hidden}
-	l.debug(f"SESSION: show_hidden: {session['config']['show_hidden']}")
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
 	return hr(html.watch(_ws_url(rq), lp, show_hidden))
 
@@ -347,9 +345,6 @@ async def ws(rq):
 	await ws.prepare(rq)
 	session = await get_session(rq)
 
-	if session.get('config'): #TODO (remove)
-		l.debug(f"WS:     show_hidden: {session['config']['show_hidden']}")
-
 	handlers = {
 		'init': _ws_init,
 		'ping': _ws_ping_pong,
@@ -378,7 +373,7 @@ async def ws(rq):
 	)
 	
 	try:
-		l.debug('new websocket established...')
+		l.info('new websocket established...')
 		await ws.send_json({'task': 'init'})
 		async for msg in ws:
 			if msg.type == WSMsgType.ERROR:
@@ -394,8 +389,10 @@ async def ws(rq):
 	if hasattr(hd, 'lpi'):
 		#TODO!NEED to match on predicate (can't figure out how), on lpi.watchers... lpi.watchers is now a UStruct -- hd.lpi.watchers.discard(ws)
 		#TODO: instead of any of this, we could just always react upon ws_send-broadcasting messages; if the send fails (b/c the ws is closed), then delete it from our set then...?
+		if ws in hd.lpi.watchers:
+			del hd.lpi.watchers[ws]
 		hd.lpi.drivers.discard(ws)
-	l.debug('websocket connection closed (ws_drive)')
+	l.info('websocket connection closed (ws_drive)')
 	return ws
 
 
@@ -416,7 +413,7 @@ async def _ws_init(hd):
 		hd.lpi = hd.rq.app['lps'][hd.lpi_id]
 
 async def _ws_add_watcher(hd):
-	hd.lpi.watchers.add(U.Struct(ws = hd.ws, config = hd.session['config']))
+	hd.lpi.watchers[hd.ws] = U.Struct(config = hd.session['config'])
 
 
 async def _ws_add_driver(hd):
@@ -433,7 +430,7 @@ async def _start_or_join_live_production(rq, dbc, production_id):
 	lp = await db.start_or_join_live_production(dbc, production_id)
 	if not rq.app['lps'].get(lp.lpi_id): # since there's no 'await' between this check and the line below, this should be atomic / async-safe
 		rq.app['lps'][lp.lpi_id] = U.Struct(
-			watchers = set(),
+			watchers = {},
 			drivers = set(),
 			display_scheme = 2,
 		)
@@ -463,7 +460,7 @@ async def _ws_drive(hd):
 	phrase = None
 	match hd.payload['action']:
 		case 'clear':
-			await asyncio.gather(*[watcher.ws.send_json({'task': 'clear'}) for watcher in hd.lpi.watchers])
+			await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		case 'live_phrase_id':
 			phrase_id = int(hd.payload['phrase_id'])
 			phrase = await db.get_phrase(hd.dbc, phrase_id)
@@ -489,12 +486,12 @@ async def _ws_drive(hd):
 async def _send_phrase_to_watchers(hd, phrase):
 	if phrase.content[0]['content'].endswith('.jpg'): # TODO: KLUDGY
 		image = settings.k_static_url + f"images/{phrase.content[0]['content']}"
-		await asyncio.gather(*[watcher.ws.send_json({'task': 'clear'}) for watcher in hd.lpi.watchers])
-		await asyncio.gather(*[watcher.ws.send_json({'task': 'bg', 'bg': image}) for watcher in hd.lpi.watchers]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
+		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
+		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': image}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
 	else:
 		sends = []
-		for watcher in hd.lpi.watchers: # TODO: separate "royal watchers" from plebians?
-			sends.append(watcher.ws.send_json({
+		for ws, watcher in hd.lpi.watchers.items(): # TODO: separate "royal watchers" from plebians?
+			sends.append(ws.send_json({
 				'task': 'set_live_content', 
 				'display_scheme': phrase.phrase['display_scheme'],
 				'content': html.div_phrase(watcher.config, phrase), # would be more efficient to call this just once (or once per config?!), but that's just it: the number of possibilities for different views on this, based on configs, could be ridiculous; might-as-well just construct each for each watcher
@@ -519,17 +516,17 @@ async def _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, conten
 	}) for ws in hd.lpi.drivers if ws != hd.ws])
 
 async def _send_new_bg_to_watchers(hd, background):
-	await asyncio.gather(*[watcher.ws.send_json({'task': 'clear'}) for watcher in hd.lpi.watchers])
+	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 	bg = settings.k_static_url + f'bgs/{background}'
-	await asyncio.gather(*[watcher.ws.send_json({'task': 'bg', 'bg': bg}) for watcher in hd.lpi.watchers])
+	await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': bg}) for ws in hd.lpi.watchers.keys()])
 
 async def _handle_announcements_arrangement(hd, arrangement_id):
 	# Announcements TODO: kludgy!
 	if arrangement_id == 20: #TODO: remove HARDCODE!
-		await asyncio.gather(*[watcher.ws.send_json({'task': 'start_announcements'}) for watcher in hd.lpi.watchers])
+		await asyncio.gather(*[ws.send_json({'task': 'start_announcements'}) for ws in hd.lpi.watchers.keys()])
 		return True #TODO: kludgy!
 	else:
-		await asyncio.gather(*[watcher.ws.send_json({'task': 'stop_announcements'}) for watcher in hd.lpi.watchers])
+		await asyncio.gather(*[ws.send_json({'task': 'stop_announcements'}) for ws in hd.lpi.watchers.keys()])
 		return False #TODO: kludgy!
 
 async def _ws_edit(hd):
@@ -629,7 +626,7 @@ async def _ws_fetch_new_announcement(hd):
 		path = _announcement_path(g_announcement_id)
 	url = settings.k_static_url + path
 	g_announcement_id += 1
-	await asyncio.gather(*[watcher.ws.send_json({'task': 'next_announcement', 'url': url}) for watcher in hd.lpi.watchers])
+	await asyncio.gather(*[ws.send_json({'task': 'next_announcement', 'url': url}) for ws in hd.lpi.watchers.keys()])
 	
 
 '''
@@ -697,8 +694,8 @@ async def _shutdown(app):
 	if 'db' in app:
 		await app['db'].close()
 	for lpi, lp in app['lps'].items():
-		for watcher in lp.watchers:
-			await watcher.ws.close()
+		for ws in lp.watchers.keys():
+			await ws.close()
 	l.info('...shutdown complete')
 
 

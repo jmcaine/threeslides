@@ -92,7 +92,7 @@ def div_phrase(config, phrase):
 			for content in phrase.content:
 				content_text = content['content']
 				cls = 'content_text'
-				if content_text.startswith('[') and content_text.endswith(']'): # chord line
+				if content_text.startswith('['): #and content_text.endswith(']'): # chord line - note, removed the endswith(']') requirement b/c it's more common for there to be final spaces or an accidental non-closure than it is for somebody to want an opening [ but not mean for it to be hidden/note text!
 					if not config['show_hidden']:
 						continue # skip this (chord) line
 					#else:
@@ -407,7 +407,8 @@ def _detail_nested_content(composition_content, click_script, content_titler, av
 				div_id = f'phrase_{composition_content.arrangement_composition_id}_{phrase_id}'
 				with t.div(id = div_id, onclick = f'{click_script}("{div_id}", {phrase_id})', cls = 'buttonish'):
 					for content in phrase.content:
-						t.div(content['content'])
+						if not content['content'].startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
+							t.div(content['content'])
 				t.hr()
 			for child in composition_content.children:
 				t.div(_detail_nested_content(child, click_script, content_titler, available_compositions, highlight_arrangement_composition_id, False))
