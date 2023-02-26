@@ -4,7 +4,7 @@ ws.onmessage = function(event) {
 	//console.log("payload.task = " + payload.task);
 	switch(payload.task) {
 		case "init":
-			ws_send({task: "init"}); // lpi_id was set at top of scripts, upon crafting initial page, and now needs to be sent ('back') to ws handler
+			ws_send({task: "init"});
 			break;
 		case "set_arrangement_content":
 			set_arrangement_content(payload.content);
