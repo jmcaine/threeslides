@@ -21,7 +21,7 @@ body,
 
 .header, .footer {
 	flex: 0 0 auto; /* set to NOT flex (within full-screen... */
-	height: 50px;
+	height: 40px;
 }
 .header {
 	display: flex; /* children will stack in a row */
@@ -154,7 +154,7 @@ input[type="time"] {
 /* The following is taken from the bottom half of driver.css... need to consolidate; the slight diff there is that the screen is a 100% with as-needed scrollbars in the individual flexboxes */
 
 .center40 {
-	width: 50em;
+	width: 60em;
 	padding: 4px;
 	margin: 0 auto; /*2em auto;*/
 	border: 0 none;

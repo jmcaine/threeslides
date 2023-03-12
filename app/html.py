@@ -119,7 +119,8 @@ def drive(ws_url, data):
 	with d:
 		with t.body():
 			with t.div(cls = 'header'):
-				t.div('CLEAR', cls = 'buttonish header_item', onclick = 'clear_watchers()');
+				t.div('CLEAR', cls = 'buttonish header_item', onclick = 'clear_watchers()')
+				t.div('EDIT SERVICE', cls = 'buttonish header_item', onclick = f"window.location.href='/edit_production_arrangements/{data.production['id']}'")
 				#t.div('UNDO', cls = 'buttonish header_item', onclick = '');
 				#NEVER!(require attention to each) t.div('NEXT', cls = 'buttonish header_item', onclick = ''); # TODO: use data.lpi_id
 			with t.div(cls = 'two-col'):
@@ -197,7 +198,7 @@ def edit_production_arrangements(ws_url, form, production, arrangement_titles, f
 		t.div(cls = 'gray_screen hide', id = 'gray_screen_div', onclick = 'hide_dialogs()') # invisible at first; for big_focus_box dialog-box, later..
 		with t.div(cls = 'full_screen'):
 			with t.div(cls = 'header'):
-				t.div('Header here...')
+				t.div('DRIVE', cls = 'buttonish header_item', onclick = f"window.location.href='/drive/{production['id']}'")
 			#_production_form('Details...', form, button, True, production, None) # -- this is too bulky, especially since it can't be scrolled off the screen (this is by design); so, simplify...
 			with t.div(cls = 'flexrow center40'):
 				t.div(t.b(f"{production['name']} - {_format_date_time(production['scheduled'])}", cls = 'rowitem'))

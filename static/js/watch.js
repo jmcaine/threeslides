@@ -72,10 +72,13 @@ function fetch_new_announcement() {
 	ws_send({task: "fetch_new_announcement"});
 };
 function start_announcements() {
-	clear();
-	ws_send({task: "fetch_new_announcement"}); // fetch first right away
-	g_announcement_interval = setInterval(fetch_new_announcement, 1000); // 10-second heartbeat; default timeouts (like nginx) are usually set to 60-seconds
+	if (g_announcement_interval == null) {
+		clear();
+		ws_send({task: "fetch_new_announcement"}); // fetch first right away
+		g_announcement_interval = setInterval(fetch_new_announcement, 10000); // 10-second heartbeat; default timeouts (like nginx) are usually set to 60-seconds
+	} // else announcements are already going
 }
+
 function stop_announcements() {
 	if (g_announcement_interval != null) {
 		clearInterval(g_announcement_interval);

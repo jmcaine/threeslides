@@ -10,19 +10,19 @@
 .two-col .left-thin {
 	width: 350px;
 	overflow-y: auto; /* show scrollbar when needed */
-	margin-left: 4em;
+	margin-left: 5em;
 }
 
 .two-col .right-rest {
 	flex: 1 1 auto;
 	overflow-y: auto; /* show scrollbar when needed */
-	margin-right: 4em;
+	margin-right: 5em;
 }
 
 
 .header, .footer {
 	flex: 0 0 auto; /* set to NOT flex (within full-screen... */
-	height: 30px;
+	height: 40px;
 }
 .header {
 	display: flex; /* children will stack in a row */
