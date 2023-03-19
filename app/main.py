@@ -480,6 +480,12 @@ async def _ws_drive(hd):
 				# if the above returns false, then this is a "normal" arrangement, handle "normally":  TODO - this is kludgy; fix!
 				await _send_new_bg_to_watchers(hd, content.background)
 				await _send_phrase_to_watchers(hd, content.children[0].phrases[0]) # TODO: this is kludgy-hardcodish; fix!
+		case 'play_video':
+			await asyncio.gather(*[ws.send_json({'task': 'play_video'}) for ws in hd.lpi.watchers.keys()])
+		case 'pause_video':
+			await asyncio.gather(*[ws.send_json({'task': 'pause_video'}) for ws in hd.lpi.watchers.keys()])
+		case 'reset_video':
+			await asyncio.gather(*[ws.send_json({'task': 'reset_video'}) for ws in hd.lpi.watchers.keys()])
 		case _:
 			l.error(f'''Action "{hd.payload['action']}" not recognized!''')
 
@@ -488,6 +494,10 @@ async def _send_phrase_to_watchers(hd, phrase):
 		image = settings.k_static_url + f"images/{phrase.content[0]['content']}"
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': image}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
+	elif phrase.content[0]['content'].endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
+		video = settings.k_static_url + f"videos/{phrase.content[0]['content']}"
+		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
+		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': video}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
 	else:
 		sends = []
 		for ws, watcher in hd.lpi.watchers.items(): # TODO: separate "royal watchers" from plebians?

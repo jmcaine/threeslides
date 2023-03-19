@@ -26,6 +26,31 @@ ws.onmessage = function(event) {
 				set_background(payload.bg);
 			} // else, leave bg white (high-contrast)
 			break;
+		case "video":
+			if (!g_show_hidden) {
+				show_video(payload.video);
+			} // else, leave bg white (high-contrast)
+			break;
+		case "play_video":
+			if (!g_show_hidden) {
+				play_video();
+			}
+			break;
+		case "pause_video":
+			if (!g_show_hidden) {
+				pause_video();
+			}
+			break;
+		case "reset_video":
+			if (!g_show_hidden) {
+				reset_video();
+			}
+			break;
+		case "remove_video":
+			if (!g_show_hidden) {
+				remove_video();
+			}
+			break;
 		case "init":
 			ws_send({task: "init", lpi_id: g_lpi_id}); // lpi_id was set at top of scripts, upon crafting initial page, and now needs to be sent ('back') to ws handler
 			ws_send({task: "add_watcher"});
@@ -57,12 +82,36 @@ function clear() {
 	$('bottom_front_frame').innerHTML = '';
 	$('main_back_frame').innerHTML = '';
 	$('main_front_frame').innerHTML = '';
+	remove_video();
 	g_top_or_bottom = 0;
 }
 
 function set_background(bg) {
 	//$(bg).src = bg;
 	document.body.style.backgroundImage = "url('" + bg + "')";
+}
+
+function show_video(movie) {
+	//$(bg).src = bg;
+	$('the_video').innerHTML = '<source src="' + movie + '" type="video/mp4" />';
+	$('the_video').load();
+	$('the_video').classList.remove('hide');
+	$('the_video').classList.add('show');
+	$('the_video').play();
+}
+
+function play_video() {
+	$('the_video').play();
+}
+function pause_video() {
+	$('the_video').pause();
+}
+function reset_video() {
+	$('the_video').load();
+}
+function remove_video() {
+	$('the_video').pause()
+	$('the_video').classList.add('hide');
 }
 
 function fetch_new_announcement() {

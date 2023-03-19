@@ -121,6 +121,9 @@ def drive(ws_url, data):
 			with t.div(cls = 'header'):
 				t.div('CLEAR', cls = 'buttonish header_item', onclick = 'clear_watchers()')
 				t.div('EDIT SERVICE', cls = 'buttonish header_item', onclick = f"window.location.href='/edit_production_arrangements/{data.production['id']}'")
+				t.div('►', cls = 'buttonish header_item', onclick = 'play_video()')
+				t.div('◄◄', cls = 'buttonish header_item', onclick = 'reset_video()')
+				t.div('■', cls = 'buttonish header_item', onclick = 'pause_video()')
 				#t.div('UNDO', cls = 'buttonish header_item', onclick = '');
 				#NEVER!(require attention to each) t.div('NEXT', cls = 'buttonish header_item', onclick = ''); # TODO: use data.lpi_id
 			with t.div(cls = 'two-col'):
@@ -146,6 +149,8 @@ def watch(ws_url, data, show_hidden):
 	d = _doc(text.doc_prefix + f'Watch {data.production["name"]}', ('watcher.css',))
 	with d:
 		with t.body():
+			with t.div(id = 'video_frame', cls = 'full_frame'): # frames below are transparent-backgrounded, so they could display on top of this (if wanted).  Also, <body>'s style takes the backgroundImage; so that's "behind" this movie div
+				t.video(id = 'the_video', cls = 'hide', width = '100%')
 			with t.div(cls = 'full_frame'):
 				t.div(id = 'main_front_frame', cls = 'vcenter_content')
 				t.div(id = 'main_back_frame', cls = 'vcenter_content')

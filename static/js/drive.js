@@ -83,6 +83,17 @@ function drive_live_composition_id(composition_id) {
 	ws_send({task: "drive", action: "live_composition_id", composition_id: composition_id});
 };
 
+function play_video() {
+	ws_send({task: "drive", action: "play_video"});
+}
+function pause_video() {
+	ws_send({task: "drive", action: "pause_video"});
+}
+function reset_video() {
+	ws_send({task: "drive", action: "reset_video"});
+}
+
+
 /*
 const input = document.querySelector('body');
 input.addEventListener('keydown', handleKey);
