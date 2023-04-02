@@ -28,7 +28,7 @@ ws.onmessage = function(event) {
 			break;
 		case "video":
 			if (!g_show_hidden) {
-				show_video(payload.video);
+				show_video(payload.video, payload.repeat);
 			} // else, leave bg white (high-contrast)
 			break;
 		case "play_video":
@@ -91,13 +91,19 @@ function set_background(bg) {
 	document.body.style.backgroundImage = "url('" + bg + "')";
 }
 
-function show_video(movie) {
+function show_video(video, repeat) {
 	//$(bg).src = bg;
-	$('the_video').innerHTML = '<source src="' + movie + '" type="video/mp4" />';
-	$('the_video').load();
-	$('the_video').classList.remove('hide');
-	$('the_video').classList.add('show');
-	$('the_video').play();
+	vid = $('the_video')
+	if (repeat) {
+		vid.setAttribute('loop', '');
+	} else {
+		vid.removeAttribute('loop');
+	}
+	vid.innerHTML = '<source src="' + video + '" type="video/mp4" />';
+	vid.load();
+	vid.classList.remove('hide');
+	vid.classList.add('show');
+	vid.play();
 }
 
 function play_video() {

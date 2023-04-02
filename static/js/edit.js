@@ -18,14 +18,11 @@ ws.onmessage = function(event) {
 		case "background_filter_results":
 			background_filter_results(payload.result_content);
 			break;
-		case "background_image_result":
-			background_image_result(payload.result);
+		case "background_media_result":
+			background_media_result(payload.result);
 			break;
 		case "fetch_composition_content":
-			fetch_composition_content(payload.text);
-			break;
-		case "composition_content_result":
-			composition_content_result(payload.result);
+			fetch_composition_content(payload.text, payload.title);
 			break;
 		case "pong":
 			// good! TODO: do something about this(?), even though there's nothing more to do to complete the loop (we'll send the next ping according to a timer (below); no need to "send" anything now, in reply)
@@ -62,15 +59,16 @@ function show_available_content_div(arrangement_composition_id) {
 	_show_dialog($('available_content_div'));
 }
 
-var g_composition_under_edit = 0;
-function show_content_text_div(composition_id) {
-	g_composition_under_edit = composition_id;
+var g_acid_under_edit = 0; // we'd really only need the composition_id, but the arrangement_composition_id incorporates the current arrangement, which is necessary to show the updated arrangement after the composition edit is finished.  Also, we could always have just fetched the composition_id, given the acid, with one more DB call; just chose to send both to this function here because we had both easily available, and infrastructure was already sent to fetch content given a composition_id.
+function show_content_text_div(composition_id, acid) {
+	g_acid_under_edit = acid;
 	ws_send({task: "edit", action: "fetch_composition_content", composition_id: composition_id});
-	// wait to show content_text_div until content is returned (composition_content_result())
+	// wait to show content_text_div until content is returned (set_arrangement_content())
 	// TODO: show spinner!?
 }
-function fetch_composition_content(text) {
+function fetch_composition_content(text, title) {
 	$('composition_content_div').value = text;
+	$('edit_content_title').value = title;
 	_show_dialog($('content_text_div'));
 }
 
@@ -105,6 +103,14 @@ function arrangement_filter_results(result_content) {
 	$('arrangement_filter_results_div').innerHTML = result_content;
 }
 
+function new_composition(name) {
+	// This is for new songs / top-level compositions...
+	//hide_dialogs(); // maybe this is better than the below, though less specific?
+	_hide_dialog($('available_arrangements_div')); // TODO: just show spinner, here, and and hide the dialog upon set_production_and_arrangement_content or set_arrangement_content callbacks?
+	ws_send({task: "edit", action: "insert_new_composition_arrangement_before", production_arrangement_id: g_insertion_paid, new_composition_name: name});
+
+}
+
 var g_arrangement_under_edit = 0;
 function edit_arrangement(arrangement_id) {
 	_cancel_bubble();
@@ -119,20 +125,21 @@ function filter_backgrounds(strng) {
 function background_filter_results(result_content) {
 	$('background_filter_results_div').innerHTML = result_content;
 }
-function set_bg_image(filename) {
-	ws_send({task: "edit", action: "set_bg_image", arrangement_id: g_arrangement_under_edit, filename: filename});
+function set_bg_media(filename) {
+	ws_send({task: "edit", action: "set_bg_media", arrangement_id: g_arrangement_under_edit, filename: filename});
 	g_arrangement_under_edit = 0;
 }
-function background_image_result(result) {
+function background_media_result(result) {
 	if (result) {
 		//alert("background image set!"); //TODO: handle result better....
 	} else {
-		alert("background image FAILED to set!");
+		alert("background media FAILED to set!");
 	}
 	hide_dialogs();
 }
 
 function noop(div_id, foo_id) {
+	//no-op -- this function IS called....
 }
 
 function _cancel_bubble() {
@@ -145,7 +152,7 @@ function _cancel_bubble() {
 function insert_arrangement_before(production_arrangement_id, new_arrangement_id, typ) { // TODO: get rid of production_arrangement_id, just use g_insertion_paid !!  - that's what we stored it for, ultimately!  (so, i.e., stop passing that paid through server and back again (in html.build_arrangement_filter_result_content)
 	//REMOVE!_cancel_bubble();
 	_hide_dialog($('available_arrangements_div')); // TODO: just show spinner, here, and and hide the dialog upon set_production_and_arrangement_content or set_arrangement_content callbacks?
-	ws_send({task: "edit", action: "insert_arrangement_before", production_arrangement_id: production_arrangement_id, new_arrangement_id: new_arrangement_id, typ: typ});
+	ws_send({task: "edit", action: "insert_arrangement_before", production_arrangement_id: production_arrangement_id, new_arrangement_id: new_arrangement_id, typ: typ}); // Could just use g_insertion_paid here instead of passing in production_arrangement_id (insertion point)... 
 }
 function insert_composition(new_composition_id) {
 	//REMOVE!_cancel_bubble();
@@ -153,17 +160,18 @@ function insert_composition(new_composition_id) {
 	ws_send({task: "edit", action: "insert_composition_before", arrangement_composition_id: g_insertion_acid, new_composition_id: new_composition_id});
 	g_insertion_acid = 0; // protect; back to 0
 }
+function insert_new_composition(composition_id) {
+	// This is for inserting a "sub" composition, like "verse 1", "chorus", etc...
+	//REMOVE!_cancel_bubble();
+	_hide_dialog($('available_content_div'));// TODO: just show spinner, here, and and hide the dialog upon set_production_and_arrangement_content or set_arrangement_content callbacks?
+	ws_send({task: "edit", action: "insert_new_composition_before", composition_id: composition_id, arrangement_composition_id: g_insertion_acid});
+	g_insertion_acid = 0; // protect; back to 0
+}
 
 function set_composition_content() {
 	_hide_dialog($('content_text_div'));// TODO: just show spinner, here, and and hide the dialog upon set_production_and_arrangement_content or set_arrangement_content callbacks?
-	ws_send({task: "edit", action: "set_composition_content", composition_id: g_composition_under_edit, text: $('composition_content_div').value});
-	g_composition_under_edit = 0; // protect; back to 0
-}
-function composition_content_result(result) {
-	if (!result) {
-		alert("composition content change FAILED!"); // TODO: handle better!
-	}
-	hide_content_text_div();
+	ws_send({task: "edit", action: "set_composition_content", arrangement_composition_id: g_acid_under_edit, title: $('edit_content_title').value, text: $('composition_content_div').value});
+	g_acid_under_edit = 0; // protect; back to 0
 }
 
 
