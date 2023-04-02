@@ -180,7 +180,7 @@ input[type="time"] {
 }
 
 .left {
-	width: 40%;
+	width: 45%;
 	overflow-y: auto; /* show scrollbar when needed */
 }
 
@@ -194,7 +194,7 @@ input[type="time"] {
 	font-weight: 800;
 }
 
-.buttonish {
+.buttonish, .pseudobuttonish {
 	margin: 7px;
 	padding: 7px;
 	background-color: #abec8e;
@@ -278,7 +278,7 @@ input[type="time"] {
 .big_focus_box {
 	position: absolute;
 	z-index: 5;
-	width: 20em;
+	width: 25em;
 	height: 60vh;
 	padding: 10px;
 	border: 4px solid #888;

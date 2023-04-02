@@ -90,10 +90,12 @@ async def get_production_arrangement_content(dbc, production_arrangement_id):
 	return await get_arrangement_content(dbc, (await fetchone(dbc, ('select arrangement from production_arrangements where id = ?', (production_arrangement_id,))))['arrangement'])
 
 async def get_composition_content(dbc, composition_id, arrangement_composition_id = None):
+	c = await fetchone(dbc, ('select composition.global, title.title from composition join title on title.id = composition.title where composition.id = ?', (composition_id,)))
 	return U.Struct(
 		arrangement_composition_id = arrangement_composition_id,
 		composition_id = composition_id,
-		title = (await fetchone(dbc, ('select title.title from composition join title on title.id = composition.title where composition.id = ?', (composition_id,))))['title'],
+		title = c['title'],
+		globl = c['global'],
 		phrases = await _get_phrases(dbc, composition_id), # may be empty list []!
 		children = [await get_composition_content(dbc, child['id']) for child in await fetchall(dbc, ('select id from composition where parent = ? order by seq', (composition_id,)))], # may be empty list []!
 	)
@@ -210,6 +212,15 @@ async def move_arrangement_up_down(dbc, production_arrangement_id, up_down): # u
 	return await _move_up_down(dbc, production_arrangement_id, up_down, 'production_arrangements', 'production')
 	# this returns the production_id to which this moved arrangement belongs, which is useful to callers (e.g., to re-load that arrangement, now that the move is complete)
 
+async def _insert_X_before(dbc, table, pkid, match_field):
+	r = await fetchone(dbc, (f'select * from {table} where id = ?', (pkid,)))
+	rec_before = await fetchone(dbc, (f'select * from {table} where {match_field} = ? and seq < ? order by seq desc limit 1', (r[match_field], r['seq'])))
+	if rec_before:
+		new_seq = (r['seq'] + rec_before['seq']) / 2
+	else:
+		new_seq = r['seq'] / 2
+	return r, new_seq
+
 async def insert_arrangement_before(dbc, production_arrangement_id, new_arrangement_id, typ):
 	if typ == 'composition':
 		# First, fabricate the new arrangement (`new_arrangement_id` is actually a composition id in this case!):
@@ -218,27 +229,33 @@ async def insert_arrangement_before(dbc, production_arrangement_id, new_arrangem
 		# Add a couple of "blanks" TODO: KLUDGY!?
 		await dbc.execute('insert into arrangement_composition(arrangement, composition, seq) values (?, ?, 0)', (new_arrangement_id, 2833)) # TODO replace 2833 hardcode!
 		await dbc.execute('insert into arrangement_composition(arrangement, composition, seq) values (?, ?, 100)', (new_arrangement_id, 2833)) # TODO replace 2833 hardcode!
-		
-	pa = await fetchone(dbc, ('select * from production_arrangements where id = ?', (production_arrangement_id,)))
-	pa_before = await fetchone(dbc, ('select * from production_arrangements where production = ? and seq < ? order by seq desc limit 1', (pa['production'], pa['seq'])))
-	if pa_before:
-		new_seq = (pa['seq'] + pa_before['seq']) / 2
-	else:
-		new_seq = pa['seq'] / 2
+
+	pa, new_seq = await _insert_X_before(dbc, 'production_arrangements', production_arrangement_id, 'production')
 	r = await dbc.execute('insert into production_arrangements (production, arrangement, seq) values (?, ?, ?)', (pa['production'], new_arrangement_id, new_seq))
 	new_production_arrangement_id = r.lastrowid
 	return pa['production'], new_production_arrangement_id
-#TODO: combine above and below!!! (generalize)
-async def insert_composition_before(dbc, arrangement_composition_id, new_composition_id):
-	ac = await fetchone(dbc, ('select * from arrangement_composition where id = ?', (arrangement_composition_id,)))
-	ac_before = await fetchone(dbc, ('select * from arrangement_composition where arrangement = ? and seq < ? order by seq desc limit 1', (ac['arrangement'], ac['seq'])))
-	if ac_before:
-		new_seq = (ac['seq'] + ac_before['seq']) / 2
-	else:
-		new_seq = ac['seq'] / 2
+
+async def insert_composition_before(dbc, arrangement_composition_id, new_composition_id): # TODO: see many similarities in insert_arrangement_before() - combine code!
+	ac, new_seq = await _insert_X_before(dbc, 'arrangement_composition', arrangement_composition_id, 'arrangement')
 	r = await dbc.execute('insert into arrangement_composition (arrangement, composition, seq) values (?, ?, ?)', (ac['arrangement'], new_composition_id, new_seq))
 	new_arrangement_composition_id = r.lastrowid
 	return ac['arrangement'], new_arrangement_composition_id
+
+async def insert_new_composition_before(dbc, composition_id, arrangement_composition_id):
+	r = await dbc.execute('insert into title (title) values (?)', ('NEW!',)) # editable later...
+	title_id = r.lastrowid
+	r = await dbc.execute('insert into composition (title, parent, seq) values (?, ?, ?)', (title_id, composition_id, 100)) # TODO: '100' is bogus; should discover what last is, and +1
+	return await insert_composition_before(dbc, arrangement_composition_id, r.lastrowid)
+
+async def insert_new_composition_arrangement_before(dbc, production_arrangement_id, new_composition_name):
+	# this is for a new SONG, or "titled" (top-level) composition; many references to "composition" are to building-block compositions
+	r = await dbc.execute('insert into title (title) values (?)', (new_composition_name,))
+	title_id = r.lastrowid
+	r = await dbc.execute('insert into composition (title) values (?)', (title_id,))
+	composition_id = r.lastrowid
+	r = await dbc.execute('insert into composition_tag (composition, tag) values (?, ?)', (composition_id, 2)) # TODO: '2' is a hardcode record ID for "song" - fix/generalize!
+	return await insert_arrangement_before(dbc, production_arrangement_id, composition_id, 'composition')
+
 
 async def remove_composition_from_arrangement(dbc, arrangement_composition_id):
 	ac = await fetchone(dbc, ('select arrangement from arrangement_composition where id = ?', (arrangement_composition_id,)))
@@ -281,9 +298,12 @@ async def set_background_image(dbc, arrangement_id, filename):
 	r = await dbc.execute(f'update arrangement set background = ? where id = ?', (filename, arrangement_id))
 	return r.rowcount == 1
 
-async def set_composition_content(dbc, composition_id, text):
+async def set_composition_content(dbc, arrangement_composition_id, title, text):
 	# TODO: do this whole function as a transaction, which we can roll back if something goes wrong....
-	await dbc.execute('delete from phrase where composition = ?', (composition_id,)) # TODO: just MARK as deleted, in DB, instead, to make for easy "undo"
+	ac = await fetchone(dbc, ('select arrangement_composition.*, composition.title as title from arrangement_composition join composition on arrangement_composition.composition = composition.id where arrangement_composition.id = ?', (arrangement_composition_id,)))
+	composition_id = ac['composition']
+	await dbc.execute('update title set title = ? where id = ?', (title, ac['title'])) # TODO: check result?!
+	await dbc.execute('delete from phrase where composition = ?', (composition_id,)) # TODO: just MARK as deleted, in DB, instead, to make for easy "undo"?!
 	phrase_seq = 0
 	content_seq = 0
 	phrase_id = None
@@ -305,7 +325,10 @@ async def set_composition_content(dbc, composition_id, text):
 			await dbc.execute('insert into content (phrase, content, seq) values (?, ?, ?)', (phrase_id, line, content_seq))
 	#!!!dbc.commit()
 	
-	return True # TODO: improve!
+	return ac['arrangement']
 
 async def get_flat_composition_content(dbc, composition_id):
-	return await _get_phrases(dbc, composition_id)
+	return U.Struct(
+		title = (await fetchone(dbc, ('select title.title from title join composition on title.id = composition.title where composition.id = ?', (composition_id,))))['title'],
+		phrases = await _get_phrases(dbc, composition_id),
+	)

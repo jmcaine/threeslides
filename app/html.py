@@ -317,7 +317,8 @@ def _content_title_with_edits(content, first, available_compositions):
 			t.div(content.title, cls = 'text') # text first, here, before buttons
 			if not first:
 				acid = content.arrangement_composition_id
-				t.button('...', title = 'edit this composition content', onclick = f'show_content_text_div({content.composition_id})')
+				if not content.globl: # can't edit "global" content here (e.g., the "blank" slide)
+					t.button('...', title = 'edit this composition content', onclick = f'show_content_text_div({content.composition_id}, {acid})')
 				t.button('-', cls = 'push', title = 'remove this block from the composition', onclick = f'remove_composition({acid})')
 				t.button('+', title = 'insert content just ABOVE of this block', onclick = f'show_available_content_div({acid})')
 				t.button('▲', title = 'move this block UP in the composition', onclick = f'move_composition_up({acid})')
@@ -328,6 +329,7 @@ def _filter_field(input_name, placeholder, onchange):
 	with result:
 		t.label('Filter: ', cls = 'float_left', fr = input_name)
 		t.input_(type = 'text', id = input_name, name = input_name, cls = 'float_left', placeholder = placeholder, onchange = onchange, onkeypress = 'this.onchange()', onpaste = 'this.onchange()', oninput = 'this.onchange()')
+		t.button('New...', cls = 'buttonish float_right', onclick = f'new_composition($("{input_name}").value)')
 		t.button('Cancel', cls = 'buttonish float_right', onclick = 'hide_dialogs()')
 		t.hr(cls = 'clear_both')
 	return result
@@ -385,24 +387,30 @@ def _detail_nested_content(composition_content, click_script, content_titler, av
 		if (first and highlight_arrangement_composition_id == None) or composition_content.arrangement_composition_id == highlight_arrangement_composition_id:
 			result = t.div(cls = 'highlighted')
 	# Set up big_focus_box for displaying composition section titles, for adding new composition sections (ONLY if _content_title_with_edits is the content titler, which will result in the '+' buttons for adding new content sections):
-	if first and available_compositions and content_titler == _content_title_with_edits: # `available_compositions` implies `content_titler == _content_title_with_edits`, but, just to be thorough... (alternately, just assert(content_titler == _content_title_with_edits) within!!! (TODO)
+	if first and content_titler == _content_title_with_edits: # `available_compositions` implies `content_titler == _content_title_with_edits`, but, just to be thorough... (alternately, just assert(content_titler == _content_title_with_edits) within!!! (TODO)
 		with result:
 			# Content chooser:
 			with t.div(id = 'available_content_div', cls = 'big_focus_box hide'):
 				with t.div(cls = 'button_band'):
 					t.div('Choose one...')
-					t.button('Cancel', cls = 'buttonish push', onclick = 'hide_available_content_div()')
+					t.button('New...', cls = 'buttonish push', onclick = f'insert_new_composition({composition_content.composition_id})')
+					t.button('Cancel', cls = 'buttonish', onclick = 'hide_available_content_div()')
 				t.hr()
-				for composition_title, composition_id in available_compositions:
-					t.div(composition_title, cls = 'pointered', onclick = f'insert_composition({composition_id})')
+				if available_compositions:
+					for composition_title, composition_id in available_compositions:
+						t.div(composition_title, cls = 'pointered', onclick = f'insert_composition({composition_id})')
+				else:
+					t.div("None exist yet... create one with the 'New...' button above!")
 			# Content editor:
 			with t.div(id = 'content_text_div', cls = 'big_focus_box hide'):
 				with t.div(cls = 'button_band'):
-					t.div('Type content here...')
+					fr = 'edit_content_title'
+					t.label('Title: ', fr = fr)
+					t.input_(type = 'text', id = fr, name = fr, placeholder = 'Type title here')
 					t.button('Cancel', cls = 'buttonish push', onclick = 'hide_content_text_div()')
-					t.button('Save', cls = 'buttonish push', onclick = 'set_composition_content()')
+					t.button('Save', cls = 'buttonish', onclick = 'set_composition_content()')
 				t.hr()
-				t.textarea(id = 'composition_content_div', cls = 'full_width_height')
+				t.textarea(id = 'composition_content_div', cls = 'full_width_height', placeholder = 'Type content here...')
 	# Render the content:
 	if composition_content:
 		with result:
@@ -411,7 +419,7 @@ def _detail_nested_content(composition_content, click_script, content_titler, av
 				# !!! phrase.phrase['display_scheme'] == 1 ?!
 				phrase_id = phrase.phrase['id']
 				div_id = f'phrase_{composition_content.arrangement_composition_id}_{phrase_id}'
-				with t.div(id = div_id, onclick = f'{click_script}("{div_id}", {phrase_id})', cls = 'buttonish'):
+				with t.div(id = div_id, onclick = f'{click_script}("{div_id}", {phrase_id})', cls = 'buttonish') if click_script else t.div(id = div_id, cls = 'pseudobuttonish'):
 					for content in phrase.content:
 						if not content['content'].startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
 							t.div(content['content'])

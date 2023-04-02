@@ -479,7 +479,8 @@ async def _ws_drive(hd):
 			if not await _handle_announcements_arrangement(hd, arrangement_id):
 				# if the above returns false, then this is a "normal" arrangement, handle "normally":  TODO - this is kludgy; fix!
 				await _send_new_bg_to_watchers(hd, content.background)
-				await _send_phrase_to_watchers(hd, content.children[0].phrases[0]) # TODO: this is kludgy-hardcodish; fix!
+				if content.children and content.children[0].phrases:
+					await _send_phrase_to_watchers(hd, content.children[0].phrases[0])
 		case 'play_video':
 			await asyncio.gather(*[ws.send_json({'task': 'play_video'}) for ws in hd.lpi.watchers.keys()])
 		case 'pause_video':
@@ -541,11 +542,11 @@ async def _handle_announcements_arrangement(hd, arrangement_id):
 
 async def _ws_edit(hd):
 	#TODO: SEE TODO items in _ws_drive!
-	__send_arrangement_content = lambda a_id, ac_id: _send_arrangement_content(hd, a_id, 'edit_phrase', html._content_title_with_edits, True, ac_id)
+	__send_arrangement_content = lambda a_id, ac_id: _send_arrangement_content(hd, a_id, None, html._content_title_with_edits, True, ac_id)
 	match hd.payload['action']:
 		case 'arrangement_id': # happens when somebody clicks on a new arrangement (title)
 			arrangement_id = int(hd.payload['arrangement_id'])
-			content = await __send_arrangement_content(arrangement_id, None)
+			await __send_arrangement_content(arrangement_id, None)
 		case 'move_composition_down':
 			await _move_composition_up_down(hd, 1)
 		case 'move_composition_up':
@@ -556,6 +557,10 @@ async def _ws_edit(hd):
 		case 'remove_composition':
 			arrangement_id = await db.remove_composition_from_arrangement(hd.dbc, hd.payload['arrangement_composition_id'])
 			await __send_arrangement_content(arrangement_id, None)
+
+		case 'insert_new_composition_before':
+			arrangement_id, new_arrangement_composition_id = await db.insert_new_composition_before(hd.dbc, int(hd.payload['composition_id']), int(hd.payload['arrangement_composition_id']))
+			await __send_arrangement_content(arrangement_id, new_arrangement_composition_id)
 
 		case 'filter_arrangements':
 			results = await db.get_compositions_and_arrangements(hd.dbc, hd.payload['strng'])
@@ -572,25 +577,28 @@ async def _ws_edit(hd):
 			await hd.ws.send_json({'task': 'background_image_result', 'result': result})
 			
 		case 'set_composition_content':
-			result = await db.set_composition_content(hd.dbc, int(hd.payload['composition_id']), hd.payload['text'])
-			#!!!arrangement_id = int(hd.payload['arrangement_id'])
-			#!!!content = await __send_arrangement_content(arrangement_id, None)
-			await hd.ws.send_json({'task': 'composition_content_result', 'result': result})
+			acid = int(hd.payload['arrangement_composition_id'])
+			arrangement_id = await db.set_composition_content(hd.dbc, acid, hd.payload['title'], hd.payload['text'])
+			await __send_arrangement_content(arrangement_id, acid)
 		case 'fetch_composition_content':
 			result = await db.get_flat_composition_content(hd.dbc, int(hd.payload['composition_id']))
 			text = ''
-			for phrase in result:
+			for phrase in result.phrases:
 				for contents in phrase.content:
 					text += contents['content'] + '\n'
 				text += '\n'
-			await hd.ws.send_json({'task': 'fetch_composition_content', 'text': text})
+			await hd.ws.send_json({'task': 'fetch_composition_content', 'title': result.title, 'text': text})
 
 		case 'insert_arrangement_before':
 			production_id, new_pa_id = await db.insert_arrangement_before(hd.dbc, hd.payload['production_arrangement_id'], hd.payload['new_arrangement_id'], hd.payload['typ'])
-			await _send_production_content(hd, production_id, 'edit_phrase', html._content_title_with_edits, True, new_pa_id)
+			await _send_production_content(hd, production_id, None, html._content_title_with_edits, True, new_pa_id)
 		case 'remove_arrangement':
 			production_id = await db.remove_arrangement_from_production(hd.dbc, hd.payload['production_arrangement_id'])
-			await _send_production_content(hd, production_id, 'edit_phrase', html._content_title_with_edits, True)
+			await _send_production_content(hd, production_id, None, html._content_title_with_edits, True)
+		case 'insert_new_composition_arrangement_before':
+			production_id, new_pa_id = await db.insert_new_composition_arrangement_before(hd.dbc, hd.payload['production_arrangement_id'], hd.payload['new_composition_name'])
+			await _send_production_content(hd, production_id, None, html._content_title_with_edits, True, new_pa_id)
+			
 
 		case 'move_arrangement_down':
 			await _move_arrangement_up_down(hd, 1)
@@ -601,12 +609,12 @@ async def _ws_edit(hd):
 async def _move_composition_up_down(hd, up_down):
 		ac_id = int(hd.payload['arrangement_composition_id'])
 		arrangement_id = await db.move_composition_up_down(hd.dbc, ac_id, up_down)
-		await _send_arrangement_content(hd, arrangement_id, 'edit_phrase', html._content_title_with_edits, True, ac_id)
+		await _send_arrangement_content(hd, arrangement_id, None, html._content_title_with_edits, True, ac_id)
 
 async def _move_arrangement_up_down(hd, up_down):
 		pa_id = int(hd.payload['production_arrangement_id'])
 		production_id = await db.move_arrangement_up_down(hd.dbc, pa_id, up_down)
-		await _send_production_content(hd, production_id, 'edit_phrase', html._content_title_with_edits, True, pa_id)
+		await _send_production_content(hd, production_id, None, html._content_title_with_edits, True, pa_id)
 
 async def _send_production_content(hd, production_id, click_script, content_titler, include_available_compositions = False, production_arrangement_id_to_highlight = None):
 	arrangement_titles = await db.get_production_arrangement_titles(hd.dbc, production_id)
