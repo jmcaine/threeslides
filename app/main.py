@@ -472,7 +472,7 @@ async def _ws_drive(hd):
 			phrase = await db.get_composition_first_phrase(hd.dbc, int(hd.payload['composition_id']))
 			await _send_phrase_to_watchers(hd, phrase)
 			await _send_new_live_phrase_id_to_other_drivers(hd, aaa)
-		case 'live_arrangement_id': # happens when somebody clicks on a new arrangement (title)
+		case 'live_arrangement_id': # happens when somebody (in /drive) clicks on a new arrangement (title)
 			arrangement_id = int(hd.payload['arrangement_id'])
 			content = await _send_arrangement_content(hd, arrangement_id, 'drive_live_phrase', html._content_title)
 			await _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, content)
@@ -498,7 +498,7 @@ async def _send_phrase_to_watchers(hd, phrase):
 	elif phrase.content[0]['content'].endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
 		video = settings.k_static_url + f"videos/{phrase.content[0]['content']}"
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
-		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': video}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
+		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': video, 'repeat': 0}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
 	else:
 		sends = []
 		for ws, watcher in hd.lpi.watchers.items(): # TODO: separate "royal watchers" from plebians?
@@ -528,8 +528,12 @@ async def _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, conten
 
 async def _send_new_bg_to_watchers(hd, background):
 	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
-	bg = settings.k_static_url + f'bgs/{background}'
-	await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': bg}) for ws in hd.lpi.watchers.keys()])
+	if background.endswith('.jpg'):
+		bg = settings.k_static_url + f'bgs/{background}'
+		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': bg}) for ws in hd.lpi.watchers.keys()])
+	elif background.endswith('.mp4'):
+		bg = settings.k_static_url + f'bgs/videos/{background}'
+		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': bg, 'repeat': 1}) for ws in hd.lpi.watchers.keys()])
 
 async def _handle_announcements_arrangement(hd, arrangement_id):
 	# Announcements TODO: kludgy!
@@ -569,12 +573,12 @@ async def _ws_edit(hd):
 
 		case 'filter_backgrounds':
 			images = await db.get_background_images(hd.dbc, hd.payload['strng'])
-			movies = await db.get_background_movies(hd.dbc, hd.payload['strng'])
-			result_content = html.build_background_filter_result_content(images, movies)
+			videos = await db.get_background_videos(hd.dbc, hd.payload['strng'])
+			result_content = html.build_background_filter_result_content(images, videos)
 			await hd.ws.send_json({'task': 'background_filter_results', 'result_content': result_content})
-		case 'set_bg_image':
-			result = await db.set_background_image(hd.dbc, int(hd.payload['arrangement_id']), hd.payload['filename'])
-			await hd.ws.send_json({'task': 'background_image_result', 'result': result})
+		case 'set_bg_media':
+			result = await db.set_background_media(hd.dbc, int(hd.payload['arrangement_id']), hd.payload['filename'])
+			await hd.ws.send_json({'task': 'background_media_result', 'result': result})
 			
 		case 'set_composition_content':
 			acid = int(hd.payload['arrangement_composition_id'])

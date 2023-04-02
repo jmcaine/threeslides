@@ -72,16 +72,17 @@ def build_arrangement_filter_result_content(results, before_production_arrangeme
 			t.div(r['title'], cls = 'pointered', onclick = f'''insert_arrangement_before({before_production_arrangement_id}, {r["id"]}, "{r['typ']}")''')
 	return d.render()
 
-def build_background_filter_result_content(images, movies):
+def build_background_filter_result_content(images, videos):
 	d = t.div(cls = 'thumbnails')
 	with d:
 		t.div('Images...')
 		for i in images:
-			t.div(t.img(src = settings.k_static_url + f'bgs/{i.filename}', width = 60), onclick = f'set_bg_image("{i.filename}")')
+			t.div(t.img(src = settings.k_static_url + f'bgs/{i.filename}', width = 60), onclick = f'set_bg_media("{i.filename}")')
 		t.hr()
-		t.div('Movies:')
-		for m in movies:
-			pass#t.div(t.img(src = settings.k_static_url + f'bgs/{i.filename}'), onclick = 'set_bg_image({i.filename})')
+		t.div('videos:')
+		for i in videos: # technically, these are thumbnails....
+			fn = i.filename.removesuffix(".small.jpg")
+			t.div(t.img(src = settings.k_static_url + f'bgs/videos/{i.filename}', width = 60), onclick = f'set_bg_media("{fn}")')
 	return d.render()
 
 

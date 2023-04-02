@@ -286,15 +286,17 @@ async def get_compositions_and_arrangements(dbc, strng):
 from os import listdir, getcwd
 from os.path import isfile, join
 async def get_background_images(dbc, strng):
-	path = join(getcwd(), 'static', 'bgs')
+	return _get_background_x(dbc, strng, join(getcwd(), 'static', 'bgs'))
+
+async def get_background_videos(dbc, strng):
+	return _get_background_x(dbc, strng, join(getcwd(), 'static', 'bgs', 'videos'))
+
+def _get_background_x(dbc, strng, path):
 	return [U.Struct(
 		filename = f,
-	) for f in listdir(path) if isfile(join(path, f))]
+	) for f in listdir(path) if (isfile(join(path, f)) and f.endswith('.jpg'))]  # filtering on .jpg even for videos, as we want the thumbnails....
 
-async def get_background_movies(dbc, strng):
-	return []
-
-async def set_background_image(dbc, arrangement_id, filename):
+async def set_background_media(dbc, arrangement_id, filename):
 	r = await dbc.execute(f'update arrangement set background = ? where id = ?', (filename, arrangement_id))
 	return r.rowcount == 1
 

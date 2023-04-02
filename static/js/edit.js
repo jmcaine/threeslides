@@ -18,8 +18,8 @@ ws.onmessage = function(event) {
 		case "background_filter_results":
 			background_filter_results(payload.result_content);
 			break;
-		case "background_image_result":
-			background_image_result(payload.result);
+		case "background_media_result":
+			background_media_result(payload.result);
 			break;
 		case "fetch_composition_content":
 			fetch_composition_content(payload.text, payload.title);
@@ -125,15 +125,15 @@ function filter_backgrounds(strng) {
 function background_filter_results(result_content) {
 	$('background_filter_results_div').innerHTML = result_content;
 }
-function set_bg_image(filename) {
-	ws_send({task: "edit", action: "set_bg_image", arrangement_id: g_arrangement_under_edit, filename: filename});
+function set_bg_media(filename) {
+	ws_send({task: "edit", action: "set_bg_media", arrangement_id: g_arrangement_under_edit, filename: filename});
 	g_arrangement_under_edit = 0;
 }
-function background_image_result(result) {
+function background_media_result(result) {
 	if (result) {
 		//alert("background image set!"); //TODO: handle result better....
 	} else {
-		alert("background image FAILED to set!");
+		alert("background media FAILED to set!");
 	}
 	hide_dialogs();
 }
