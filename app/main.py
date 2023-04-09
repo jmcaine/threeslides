@@ -723,6 +723,8 @@ async def _shutdown(app):
 
 # Run server like so, from cli:
 #		python -m aiohttp.web -H localhost -P 8080 main:init
+#		python -m aiohttp.web -H localhost -P 8462 main:init
+#         https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
 # Or, using adev (from parent directory!) (TYPICAL):
 #		adev runserver -s static --livereload app
 # Or... (older?)
