@@ -73,16 +73,18 @@ def build_arrangement_filter_result_content(results, before_production_arrangeme
 	return d.render()
 
 def build_background_filter_result_content(images, videos):
+	def add_thumbnails(lst, path):
+		for i in lst:
+			fn = i.filename.removesuffix(".small.jpg") # thumbnails
+			t.div(t.img(src = settings.k_static_url + f'{path}/{i.filename}', width = 80), onclick = f'set_bg_media("{fn}")')
+
 	d = t.div(cls = 'thumbnails')
 	with d:
 		t.div('Images...')
-		for i in images:
-			t.div(t.img(src = settings.k_static_url + f'bgs/{i.filename}', width = 60), onclick = f'set_bg_media("{i.filename}")')
+		add_thumbnails(images, 'bgs')
 		t.hr()
-		t.div('videos:')
-		for i in videos: # technically, these are thumbnails....
-			fn = i.filename.removesuffix(".small.jpg")
-			t.div(t.img(src = settings.k_static_url + f'bgs/videos/{i.filename}', width = 60), onclick = f'set_bg_media("{fn}")')
+		t.div('Videos:')
+		add_thumbnails(videos, 'bgs/videos')
 	return d.render()
 
 
