@@ -527,13 +527,14 @@ async def _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, conten
 	}) for ws in hd.lpi.drivers if ws != hd.ws])
 
 async def _send_new_bg_to_watchers(hd, background):
-	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
-	if background.endswith('.jpg'):
-		bg = settings.k_static_url + f'bgs/{background}'
-		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': bg}) for ws in hd.lpi.watchers.keys()])
-	elif background.endswith('.mp4'):
-		bg = settings.k_static_url + f'bgs/videos/{background}'
-		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': bg, 'repeat': 1}) for ws in hd.lpi.watchers.keys()])
+	if background: # no-op, otherwise
+		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
+		if background.endswith('.jpg'):
+			bg = settings.k_static_url + f'bgs/{background}'
+			await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': bg}) for ws in hd.lpi.watchers.keys()])
+		elif background.endswith('.mp4'):
+			bg = settings.k_static_url + f'bgs/videos/{background}'
+			await asyncio.gather(*[ws.send_json({'task': 'video', 'video': bg, 'repeat': 1}) for ws in hd.lpi.watchers.keys()])
 
 async def _handle_announcements_arrangement(hd, arrangement_id):
 	# Announcements TODO: kludgy!

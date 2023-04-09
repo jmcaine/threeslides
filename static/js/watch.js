@@ -18,6 +18,9 @@ ws.onmessage = function(event) {
 		case "set_live_content":
 			set_live_content(payload.display_scheme, payload.content, payload.bg);
 			break;
+		case "reset":
+			reset();
+			break;
 		case "clear":
 			clear();
 			break;
@@ -82,12 +85,17 @@ function clear() {
 	$('bottom_front_frame').innerHTML = '';
 	$('main_back_frame').innerHTML = '';
 	$('main_front_frame').innerHTML = '';
-	remove_video();
 	g_top_or_bottom = 0;
+}
+
+function reset() {
+	clear()
+	remove_video();
 }
 
 function set_background(bg) {
 	//$(bg).src = bg;
+	remove_video();
 	document.body.style.backgroundImage = "url('" + bg + "')";
 }
 
@@ -128,7 +136,7 @@ function fetch_new_announcement() {
 };
 function start_announcements() {
 	if (g_announcement_interval == null) {
-		clear();
+		reset();
 		ws_send({task: "fetch_new_announcement"}); // fetch first right away
 		g_announcement_interval = setInterval(fetch_new_announcement, 10000); // 10-second heartbeat; default timeouts (like nginx) are usually set to 60-seconds
 	} // else announcements are already going
