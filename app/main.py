@@ -754,7 +754,7 @@ async def init(argv):
 
 
 def app():
-	return init(None)
+	return await init(None)
 
 
 if __name__ == '__main__':
