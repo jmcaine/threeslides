@@ -288,15 +288,12 @@ input[type="time"] {
 	/*overflow: hidden;*/
 }
 
-.big_focus_box button, label, input[type="text"] {
-	all: unset;
+.big_focus_box :is(label, input[type="text"]) {
 	padding: 0.25em 1em 0 0;
 }
 .big_focus_box button {
-	background-color: #aaa;
-	border: 2px solid #000;
-	border-radius: 4px;
-	padding: 3px;
+	/*background-color: #abec8e;*/
+	border: 2px solid #888;
 }
 
 /* ----------------------------------------------------------------- */
