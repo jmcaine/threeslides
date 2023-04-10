@@ -756,3 +756,14 @@ async def init(argv):
 def app():
 	return init(None)
 
+
+if __name__ == '__main__':
+	import argparse
+	parser = argparse.ArgumentParser(description="aiohttp server example")
+	parser.add_argument('--path')
+
+    app = app()
+    # configure app
+
+    args = parser.parse_args()
+    web.run_app(app, path=args.path, port=args.port)
