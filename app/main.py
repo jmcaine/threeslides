@@ -730,7 +730,7 @@ async def _shutdown(app):
 #		adev runserver -s static --livereload app
 # Or... (older?)
 #		adev runserver --app-factory init --livereload --debug-toolbar test1_app
-async def init(argv):
+def init(argv):
 	app = web.Application()
 
 	# Set up sessions:
@@ -754,7 +754,7 @@ async def init(argv):
 
 
 def app():
-	return await init(None)
+	return init(None)
 
 
 if __name__ == '__main__':
@@ -766,4 +766,4 @@ if __name__ == '__main__':
 	# configure app
 
 	args = parser.parse_args()
-	web.run_app(app, path=args.path, port=args.port)
+	web.run_app(app, path=args.path)#, port=args.port)
