@@ -328,13 +328,12 @@ def _content_title_with_edits(content, first, available_compositions):
 				t.button('▼', title = 'move this block DOWN in the composition', onclick = f'move_composition_down({acid})')
 
 def _filter_field(input_name, placeholder, onchange):
-	result = t.div()
+	result = t.div(cls = 'button_band')
 	with result:
-		t.label('Filter: ', cls = 'float_left', fr = input_name)
-		t.input_(type = 'text', id = input_name, name = input_name, cls = 'float_left', placeholder = placeholder, onchange = onchange, onkeypress = 'this.onchange()', onpaste = 'this.onchange()', oninput = 'this.onchange()')
-		t.button('New...', cls = 'buttonish float_right', onclick = f'new_composition($("{input_name}").value)')
-		t.button('Cancel', cls = 'buttonish float_right', onclick = 'hide_dialogs()')
-		t.hr(cls = 'clear_both')
+		t.label('Filter: ', fr = input_name)
+		t.input_(type = 'text', id = input_name, name = input_name, placeholder = placeholder, onchange = onchange, onkeypress = 'this.onchange()', onpaste = 'this.onchange()', oninput = 'this.onchange()')
+		t.button('New...', cls = 'push buttonish', onclick = f'new_composition($("{input_name}").value)')
+		t.button('Cancel', cls = 'buttonish', onclick = 'hide_dialogs()')
 	return result
 
 def _build_left_arrangement_titles(arrangement_titles, click_script, buttons, production_arrangement_id_to_highlight = None):
@@ -343,9 +342,11 @@ def _build_left_arrangement_titles(arrangement_titles, click_script, buttons, pr
 	with result:
 		with t.div(id = 'arrangement_details_div', cls = 'big_focus_box hide'):
 			_filter_field('background_filter_div', 'start typing search terms here...', 'filter_backgrounds(this.value)')
+			t.hr()
 			t.div(id = 'background_filter_results_div')
 		with t.div(id = 'available_arrangements_div', cls = 'big_focus_box hide'):
 			_filter_field('arrangement_filter_div', 'start typing title here...', 'filter_arrangements(this.value)')
+			t.hr()
 			t.div(id = 'arrangement_filter_results_div')
 		for title in arrangement_titles:
 			aid = title.arrangement_id
