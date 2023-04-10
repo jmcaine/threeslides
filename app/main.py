@@ -762,8 +762,8 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description="aiohttp server example")
 	parser.add_argument('--path')
 
-    app = app()
-    # configure app
+	app = app()
+	# configure app
 
-    args = parser.parse_args()
-    web.run_app(app, path=args.path, port=args.port)
+	args = parser.parse_args()
+	web.run_app(app, path=args.path, port=args.port)
