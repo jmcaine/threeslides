@@ -54,6 +54,9 @@ ws.onmessage = function(event) {
 				remove_video();
 			}
 			break;
+		case "set_live_content_blank":
+			set_live_content(1, "", 0); // TODO: fix hardcodes!
+			break;
 		case "init":
 			ws_send({task: "init", lpi_id: g_lpi_id}); // lpi_id was set at top of scripts, upon crafting initial page, and now needs to be sent ('back') to ws handler
 			ws_send({task: "add_watcher"});

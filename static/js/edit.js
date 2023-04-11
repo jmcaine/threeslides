@@ -141,6 +141,9 @@ function background_media_result(result) {
 function noop(div_id, foo_id) {
 	//no-op -- this function IS called....
 }
+function select_blank() {
+	 //no-op -- this function IS called...
+}
 
 function _cancel_bubble() {
 	// clear all ancestors' interests in this click event (so that smallest, topmost handler ONLY can service the click):

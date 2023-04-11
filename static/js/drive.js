@@ -93,6 +93,9 @@ function reset_video() {
 	ws_send({task: "drive", action: "reset_video"});
 }
 
+function select_blank() {
+	ws_send({task: "drive", action: "select_blank"});
+}
 
 /*
 const input = document.querySelector('body');

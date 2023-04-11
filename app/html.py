@@ -132,11 +132,12 @@ def drive(ws_url, data):
 			with t.div(cls = 'two-col'):
 				with t.div(cls = 'left-thin highlight_container', id = 'production_content'):
 					_build_left_arrangement_titles(data.arrangement_titles, 'drive_arrangement', False)
+					#TODO: add "final adder" (for appending an arrangement)
 				with t.div(cls = 'right-rest highlight_container', id = 'arrangement_content'):
 					_detail_nested_content(data.first_arrangement_content, 'drive_live_phrase', _content_title)
+					t.div('<blank>', cls = 'buttonish', onclick = 'select_blank()')
 			with t.div(cls = 'footer'):
 				t.div('Footer here...')
-
 				#t.hr()
 				#with t.div('LIVE:', cls = 'live_frame_frame'): # TODO - fix this live box!!! (OR abandon it!)
 				#	t.div(id = 'live_frame', cls = 'full_frame') # empty... for content, later
@@ -427,9 +428,11 @@ def _detail_nested_content(composition_content, click_script, content_titler, av
 					for content in phrase.content:
 						if not content['content'].startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
 							t.div(content['content'])
-				t.hr()
+			t.hr()
 			for child in composition_content.children:
 				t.div(_detail_nested_content(child, click_script, content_titler, available_compositions, highlight_arrangement_composition_id, False))
+			if first: # put a blank at the bottom of all top-level arrangements...
+				t.div('<blank>', cls = 'buttonish', onclick = 'select_blank()')
 	return result
 
 

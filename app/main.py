@@ -479,8 +479,11 @@ async def _ws_drive(hd):
 			if not await _handle_announcements_arrangement(hd, arrangement_id):
 				# if the above returns false, then this is a "normal" arrangement, handle "normally":  TODO - this is kludgy; fix!
 				await _send_new_bg_to_watchers(hd, content.background)
-				if content.children and content.children[0].phrases:
-					await _send_phrase_to_watchers(hd, content.children[0].phrases[0])
+				#REMOVED the following two lines - don't really want to auto-load first phrase, after all; always let user do it manually; always start with "blank screen"
+				#if content.children and content.children[0].phrases:
+				#	await _send_phrase_to_watchers(hd, content.children[0].phrases[0])
+		case 'select_blank':
+			await asyncio.gather(*[ws.send_json({'task': 'set_live_content_blank'}) for ws in hd.lpi.watchers.keys()])
 		case 'play_video':
 			await asyncio.gather(*[ws.send_json({'task': 'play_video'}) for ws in hd.lpi.watchers.keys()])
 		case 'pause_video':
