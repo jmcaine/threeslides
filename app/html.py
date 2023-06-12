@@ -95,6 +95,9 @@ def div_phrase(config, phrase):
 			for content in phrase.content:
 				content_text = content['content']
 				cls = 'content_text'
+				if content_text.startswith('<'):
+					cls = 'content_smaller_text'
+					content_text = content_text.strip('<')
 				if content_text.startswith('['): #and content_text.endswith(']'): # chord line - note, removed the endswith(']') requirement b/c it's more common for there to be final spaces or an accidental non-closure than it is for somebody to want an opening [ but not mean for it to be hidden/note text!
 					if not config['show_hidden']:
 						continue # skip this (chord) line

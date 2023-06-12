@@ -37,7 +37,7 @@ body {
 .halfh_frame_frame {
 	position: absolute;
 	background-color: transparent;
-	height: 100%;
+	height: 68%;
 	width: 100%;
 }
 
@@ -94,6 +94,10 @@ body {
 
 .content_text {
 	color: black;
+}
+.content_smaller_text {
+	color: black;
+	font-size: 3vw;
 }
 .content_chord {
 	color: gray;
