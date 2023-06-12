@@ -503,16 +503,19 @@ async def _send_phrase_to_watchers(hd, phrase):
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': video, 'repeat': 0}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
 	else:
-		sends = []
-		for ws, watcher in hd.lpi.watchers.items(): # TODO: separate "royal watchers" from plebians?
-			sends.append(ws.send_json({
-				'task': 'set_live_content', 
-				'display_scheme': phrase.phrase['display_scheme'],
-				'content': html.div_phrase(watcher.config, phrase), # would be more efficient to call this just once (or once per config?!), but that's just it: the number of possibilities for different views on this, based on configs, could be ridiculous; might-as-well just construct each for each watcher
-				#TODO: 'bg': bg,
-			}))
-			# TODO: check now, after each, to see if there are more drive messages on the pipe that might just render these null and void?  Then abandon the dispersal until new drive message(s) are folded in?
-		await asyncio.gather(*sends)
+		if phrase and phrase.content and len(phrase.content) == 1 and phrase.content[0]['content'] == '.': # the entire contents being a simple '.' means that this is to be a "blank"! (likewise, a chord line starts with '['; if this is a 1-liner that is a chord line alone, then we'll make it a "blank" line)
+			await asyncio.gather(*[ws.send_json({'task': 'set_live_content_blank'}) for ws in hd.lpi.watchers.keys()])
+		else:
+			sends = []
+			for ws, watcher in hd.lpi.watchers.items(): # TODO: separate "royal watchers" from plebians?
+				sends.append(ws.send_json({
+					'task': 'set_live_content',
+					'display_scheme': phrase.phrase['display_scheme'],
+					'content': html.div_phrase(watcher.config, phrase), # would be more efficient to call this just once (or once per config?!), but that's just it: the number of possibilities for different views on this, based on configs, could be ridiculous; might-as-well just construct each for each watcher
+					#TODO: 'bg': bg,
+				}))
+				# TODO: check now, after each, to see if there are more drive messages on the pipe that might just render these null and void?  Then abandon the dispersal until new drive message(s) are folded in?
+			await asyncio.gather(*sends)
 		
 
 async def _send_new_live_phrase_id_to_other_drivers(hd, div_id):

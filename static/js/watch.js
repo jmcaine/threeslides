@@ -156,7 +156,7 @@ function next_announcement(url) {
 }
 
 function set_live_content(display_scheme, content, bg) {
-	// TODO: DON'T flip frames if the content is "empty" (blank)
+	// TODO: DON'T flip frames if the content is "empty" (blank) -- REALLY?!?!
 	if (display_scheme == 1) { // TODO: remove hardcode; 1 is "dual"
 		if (g_dual_frame == false) {
 			$('main_back_frame').style.opacity = 0; // fades out, based on css 'transition'
