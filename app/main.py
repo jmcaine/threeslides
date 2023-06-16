@@ -590,8 +590,9 @@ async def _ws_edit(hd):
 			
 		case 'set_composition_content':
 			acid = int(hd.payload['arrangement_composition_id'])
-			arrangement_id = await db.set_composition_content(hd.dbc, acid, hd.payload['title'], hd.payload['text'])
-			await __send_arrangement_content(arrangement_id, acid)
+			aid = await _set_composition_content(hd, acid)
+			await __send_arrangement_content(aid, acid)
+
 		case 'fetch_composition_content':
 			result = await db.get_flat_composition_content(hd.dbc, int(hd.payload['composition_id']))
 			text = ''
@@ -617,16 +618,36 @@ async def _ws_edit(hd):
 		case 'move_arrangement_up':
 			await _move_arrangement_up_down(hd, -1)
 
+async def _set_composition_content(hd, acid):
+	text = hd.payload['text']
+
+	phrases = []
+	content_lines = []
+	for line in text.strip().splitlines():
+		# Look for .jpg lines that might indicate a need for thumbnail-creation:
+		stripped_line = line.strip()
+		if not stripped_line: # if blank line...
+			if content_lines: # multiple blank lines should be ignored, rather than creating extra (empty) phrases
+				phrases.append(content_lines)
+				content_lines = []
+		else:
+			content_lines.append(line)
+	# final straggler:
+	if content_lines:
+		phrases.append(content_lines)
+
+	arrangement_id = await db.set_composition_content(hd.dbc, acid, hd.payload['title'], phrases)
+	return arrangement_id
 
 async def _move_composition_up_down(hd, up_down):
-		ac_id = int(hd.payload['arrangement_composition_id'])
-		arrangement_id = await db.move_composition_up_down(hd.dbc, ac_id, up_down)
-		await _send_arrangement_content(hd, arrangement_id, None, html._content_title_with_edits, True, ac_id)
+	ac_id = int(hd.payload['arrangement_composition_id'])
+	arrangement_id = await db.move_composition_up_down(hd.dbc, ac_id, up_down)
+	await _send_arrangement_content(hd, arrangement_id, None, html._content_title_with_edits, True, ac_id)
 
 async def _move_arrangement_up_down(hd, up_down):
-		pa_id = int(hd.payload['production_arrangement_id'])
-		production_id = await db.move_arrangement_up_down(hd.dbc, pa_id, up_down)
-		await _send_production_content(hd, production_id, None, html._content_title_with_edits, True, pa_id)
+	pa_id = int(hd.payload['production_arrangement_id'])
+	production_id = await db.move_arrangement_up_down(hd.dbc, pa_id, up_down)
+	await _send_production_content(hd, production_id, None, html._content_title_with_edits, True, pa_id)
 
 async def _send_production_content(hd, production_id, click_script, content_titler, include_available_compositions = False, production_arrangement_id_to_highlight = None):
 	arrangement_titles = await db.get_production_arrangement_titles(hd.dbc, production_id)

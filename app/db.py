@@ -300,29 +300,21 @@ async def set_background_media(dbc, arrangement_id, filename):
 	r = await dbc.execute(f'update arrangement set background = ? where id = ?', (filename, arrangement_id))
 	return r.rowcount == 1
 
-async def set_composition_content(dbc, arrangement_composition_id, title, text):
+async def set_composition_content(dbc, arrangement_composition_id, title, phrases):
 	# TODO: do this whole function as a transaction, which we can roll back if something goes wrong....
 	ac = await fetchone(dbc, ('select arrangement_composition.*, composition.title as title from arrangement_composition join composition on arrangement_composition.composition = composition.id where arrangement_composition.id = ?', (arrangement_composition_id,)))
 	composition_id = ac['composition']
 	await dbc.execute('update title set title = ? where id = ?', (title, ac['title'])) # TODO: check result?!
 	await dbc.execute('delete from phrase where composition = ?', (composition_id,)) # TODO: just MARK as deleted, in DB, instead, to make for easy "undo"?!
+
 	phrase_seq = 0
-	content_seq = 0
-	phrase_id = None
-	just_broke = False # blank-line singleton enforcer (subsequent blank lines will be ignored, rather than creating extra phrase records)
-	for line in text.strip().splitlines():
-		# Create new phrase (if no line (nothing left when stripped) or phrase_id is not yet set):
-		stripped_line = line.strip()
-		if not just_broke and (not stripped_line or not phrase_id):
-			phrase_seq += 1
-			r = await dbc.execute('insert into phrase (composition, seq, display_scheme) values (?, ?, ?)', (composition_id, phrase_seq, 1))
-			phrase_id = r.lastrowid
-			content_seq = 0
-			just_broke = True
-		# Add new line of content (even if created a new phrase, above; if stripped line is non-empty, then it needs to be added!)
-		if stripped_line:
-			just_broke = False
-			assert(phrase_id)
+	for phrase in phrases:
+		phrase_seq += 1
+		r = await dbc.execute('insert into phrase (composition, seq, display_scheme) values (?, ?, ?)', (composition_id, phrase_seq, 1))
+		phrase_id = r.lastrowid
+		assert(phrase_id)
+		content_seq = 0
+		for line in phrase:
 			content_seq += 1
 			await dbc.execute('insert into content (phrase, content, seq) values (?, ?, ?)', (phrase_id, line, content_seq))
 	#!!!dbc.commit()
