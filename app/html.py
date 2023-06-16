@@ -152,8 +152,11 @@ def drive(ws_url, data):
 	return d.render()
 
 
-def watch(ws_url, data, show_hidden):
+def watch(ws_url, data, show_hidden, cut_frame):
 	d = _doc(text.doc_prefix + f'Watch {data.production["name"]}', ('watcher.css',))
+	halfh_frame_frame_cls = 'halfh_frame_frame_cut'
+	if show_hidden or cut_frame:
+		halfh_frame_frame_cls = 'halfh_frame_frame'
 	with d:
 		with t.body():
 			with t.div(id = 'video_frame', cls = 'full_frame'): # frames below are transparent-backgrounded, so they could display on top of this (if wanted).  Also, <body>'s style takes the backgroundImage; so that's "behind" this movie div
@@ -161,7 +164,7 @@ def watch(ws_url, data, show_hidden):
 			with t.div(cls = 'full_frame'):
 				t.div(id = 'main_front_frame', cls = 'vcenter_content')
 				t.div(id = 'main_back_frame', cls = 'vcenter_content')
-			with t.div(cls = 'halfh_frame_frame'):
+			with t.div(cls = halfh_frame_frame_cls):
 				with t.div(id = 'top_frame', cls = 'halfh_frame'):
 					t.div(id = 'top_front_frame', cls = 'vcenter_content')
 					t.div(id = 'top_back_frame', cls = 'vcenter_content')
@@ -172,7 +175,7 @@ def watch(ws_url, data, show_hidden):
 		t.script(_js_ws(ws_url))
 		t.script(_js_lpi(data.lpi_id))
 		t.script(_js_show_hidden(show_hidden))
-		add_scripts(('basic.js', 'ws.js', 'watch.js'))
+		add_scripts(('basic.js', 'ws.js', 'watch.js?bust=1'))
 
 	return d.render()
 
@@ -256,6 +259,8 @@ def _doc(title, css = None):
 	d = document(title = title)
 	with d.head:
 		t.meta(name = 'viewport', content = 'width=device-width, initial-scale=1')
+		t.link(href = "https://fonts.googleapis.com/css?family=Germania+One", rel = 'stylesheet')
+		t.link(href = "https://fonts.googleapis.com/css?family=Carter+One", rel = 'stylesheet')
 		#t.link(href = "https://fonts.googleapis.com/css2?family=Alfa+Slab+One", rel = 'stylesheet') # TODO: DOWNLOAD! Don't depend on Internet!
 		t.link(href = settings.k_static_url + 'css/common.css' + k_cache_version, rel = 'stylesheet')
 		if css:

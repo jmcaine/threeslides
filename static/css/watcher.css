@@ -34,10 +34,16 @@ body {
 	transition: opacity 2s ease; */
 }
 
-.halfh_frame_frame {
+.halfh_frame_frame_cut {
 	position: absolute;
 	background-color: transparent;
 	height: 68%;
+	width: 100%;
+}
+.halfh_frame_frame {
+	position: absolute;
+	background-color: transparent;
+	height: 100%;
 	width: 100%;
 }
 
@@ -73,13 +79,13 @@ body {
 .halo_content, .outline_content, .preformatted_content {
 	padding: 0.3em;
 	color: black;
-	font-size: 5vw;
+	font-size: 6vw;
 	font-weight: 900;
 	text-align: center;
 }
 
 .halo_content {
-	font-family: verdana, sans-serif;
+	font-family: "Germania One", "Carter One", verdana, sans-serif;
 	/*font-family: arial black, sans-serif; -- arial black looks pretty good, with the 'stroke' settings, below, but it is a MS font (have to install ttf-mscorefonts-installer), and verdana seems to be an even better choice, on closer inspection, in terms of narrower tracking, plenty of girth, etc., as long as it's used at full font-weight (900) */
 	text-shadow: 0px 0px 15px white, 0px 0px 20px white, 0px 0px 20px white, 0px 0px 20px white, 0px 0px 30px white; /* poor performance; won't run on SBCs!! */
 }

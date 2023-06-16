@@ -228,10 +228,11 @@ async def drive(rq):
 @rt.get('/watch/{production_id}')
 async def watch(rq):
 	show_hidden = bool(rq.query.get('show_hidden', False))
+	cut_frame = bool(rq.query.get('cut_frame', False))
 	session = await get_session(rq)
-	session['config'] = {'show_hidden': show_hidden}
+	session['config'] = {'show_hidden': show_hidden, 'cut_frame': cut_frame}
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
-	return hr(html.watch(_ws_url(rq), lp, show_hidden))
+	return hr(html.watch(_ws_url(rq), lp, show_hidden, cut_frame))
 
 
 # ------------------------
@@ -646,16 +647,28 @@ async def _send_production_content(hd, production_id, click_script, content_titl
 	arrangement_content_div = html.detail_nested_content(arrangement_content, click_script, content_titler, available_compositions)
 	await hd.ws.send_json({'task': 'set_production_and_arrangement_content', 'production_content': production_content_div, 'arrangement_content': arrangement_content_div})
 
-_announcement_path = lambda num: f"images/announcements/s - {str(num).rjust(2, '0')}.jpg"
+from os import listdir
+#_announcement_path = lambda num: f"images/announcements/s - {str(num).rjust(2, '0')}.jpg"
+_announcements = listdir('static/images/announcements')
 async def _ws_fetch_new_announcement(hd):
 	global g_announcement_id # TODO: use hd instead
-	path = _announcement_path(g_announcement_id)
-	if not path_exists('static/' + path): # TODO: improve! use pathstuffs!
-		g_announcement_id = 1 # start over
-		path = _announcement_path(g_announcement_id)
+	path = f'images/announcements/{_announcements[g_announcement_id]}'
 	url = settings.k_static_url + path
 	g_announcement_id += 1
+	g_announcement_id %= len(_announcements)
 	await asyncio.gather(*[ws.send_json({'task': 'next_announcement', 'url': url}) for ws in hd.lpi.watchers.keys()])
+	
+
+#_announcement_path = lambda num: f"images/announcements/s - {str(num).rjust(2, '0')}.jpg"
+#async def _ws_fetch_new_announcement(hd):
+#	global g_announcement_id # TODO: use hd instead
+#	path = _announcement_path(g_announcement_id)
+#	if not path_exists('static/' + path): # TODO: improve! use pathstuffs!
+#		g_announcement_id = 1 # start over
+#		path = _announcement_path(g_announcement_id)
+#	url = settings.k_static_url + path
+#	g_announcement_id += 1
+#	await asyncio.gather(*[ws.send_json({'task': 'next_announcement', 'url': url}) for ws in hd.lpi.watchers.keys()])
 	
 
 '''
