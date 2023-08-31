@@ -190,18 +190,17 @@ input[type="time"] {
 }
 
 .live { /*TODO(?) the term 'live' comes from drive.js; this css is more for edit.js, and there's no "live", as in a live production, but there is a "chosen"; we're leaving this nomenclature because it facilitates some code-sharing in drive.js / edit.js */
-	background-color: #ee0000;
+	background-color: #9ea5db;
 	font-weight: 800;
 }
 
 .buttonish, .pseudobuttonish {
 	margin: 7px;
 	padding: 7px;
-	background-color: #abec8e;
+	background-color: #aebadb;
 }
 .buttonish:hover {
-	/* background-color: #53d441;  */
-	background-color: #53d441;
+	background-color: #9ea5db;
 	cursor: pointer;
 }
 
@@ -269,7 +268,7 @@ input[type="time"] {
 }
 
 .highlighted { /* note that this is duplicated in driver.css -- TODO: consolidate? */
-	background-color: #53d441; /* just a touch beyond .buttonish:hover */
+	background-color: #788ba9; /* just a touch beyond .buttonish:hover */
 	font-weight: bold;
 }
 

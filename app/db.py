@@ -226,9 +226,8 @@ async def insert_arrangement_before(dbc, production_arrangement_id, new_arrangem
 		# First, fabricate the new arrangement (`new_arrangement_id` is actually a composition id in this case!):
 		r = await dbc.execute('insert into arrangement (title, composition) values (?, ?)', (812, new_arrangement_id)) # TODO: 1) replace '812' hardcode! 2) add background!?
 		new_arrangement_id = r.lastrowid
-		# Add a couple of "blanks" TODO: KLUDGY!?
-		await dbc.execute('insert into arrangement_composition(arrangement, composition, seq) values (?, ?, 0)', (new_arrangement_id, 2833)) # TODO replace 2833 hardcode!
-		await dbc.execute('insert into arrangement_composition(arrangement, composition, seq) values (?, ?, 100)', (new_arrangement_id, 2833)) # TODO replace 2833 hardcode!
+		# Add a final "blank" as the last TODO: KLUDGY!?
+		await dbc.execute('insert into arrangement_composition(arrangement, composition, seq) values (?, ?, 1000)', (new_arrangement_id, 2833)) # TODO replace 2833 hardcode! AND 100 hardcode!
 
 	pa, new_seq = await _insert_X_before(dbc, 'production_arrangements', production_arrangement_id, 'production')
 	r = await dbc.execute('insert into production_arrangements (production, arrangement, seq) values (?, ?, ?)', (pa['production'], new_arrangement_id, new_seq))

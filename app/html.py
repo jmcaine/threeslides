@@ -40,8 +40,8 @@ class Form:
 
 # Handlers --------------------------------------------------------------------
 
-def select_song(songs):
-	d = _doc(text.doc_prefix + 'Select Song')
+def select_song(origin, songs):
+	d = _doc(text.doc_prefix + 'Select Song', origin)
 	with d:
 		with t.div():
 			[t.div(t.a(song['title'], href = '/detail/song/%d' % song['id'])) for song in songs]
@@ -49,8 +49,8 @@ def select_song(songs):
 		#		t.script(_js_validate_event())
 	return d.render()
 
-def select_song_arrangement(arrangements):
-	d = _doc(text.doc_prefix + 'Select Arrangement')
+def select_song_arrangement(origin, arrangements):
+	d = _doc(text.doc_prefix + 'Select Arrangement', origin)
 	with d:
 		with t.div():
 			[t.div(t.a(arrangement['title'], href = '/detail/song_arrangement/%d' % arrangement['id'])) for arrangement in arrangements]
@@ -72,11 +72,11 @@ def build_arrangement_filter_result_content(results, before_production_arrangeme
 			t.div(r['title'], cls = 'pointered', onclick = f'''insert_arrangement_before({before_production_arrangement_id}, {r["id"]}, "{r['typ']}")''')
 	return d.render()
 
-def build_background_filter_result_content(images, videos):
+def build_background_filter_result_content(origin, images, videos):
 	def add_thumbnails(lst, path):
 		for i in lst:
 			fn = i.filename.removesuffix(".small.jpg") # thumbnails
-			t.div(t.img(src = settings.k_static_url + f'{path}/{i.filename}', width = 80), onclick = f'set_bg_media("{fn}")')
+			t.div(t.img(src = origin + f'/static/{path}/{i.filename}', width = 80), onclick = f'set_bg_media("{fn}")')
 
 	d = t.div(cls = 'thumbnails')
 	with d:
@@ -93,12 +93,12 @@ def div_phrase(config, phrase):
 	if phrase:
 		with result:
 			for content in phrase.content:
-				content_text = content['content']
+				content_text = str(content['content'])
 				cls = 'content_text'
 				if content_text.startswith('<'):
 					cls = 'content_smaller_text'
 					content_text = content_text.strip('<')
-				if content_text.startswith('['): #and content_text.endswith(']'): # chord line - note, removed the endswith(']') requirement b/c it's more common for there to be final spaces or an accidental non-closure than it is for somebody to want an opening [ but not mean for it to be hidden/note text!
+				elif content_text.startswith('['): #and content_text.endswith(']'): # chord line - note, removed the endswith(']') requirement b/c it's more common for there to be final spaces or an accidental non-closure than it is for somebody to want an opening [ but not mean for it to be hidden/note text!
 					if not config['show_hidden']:
 						continue # skip this (chord) line
 					#else:
@@ -108,8 +108,8 @@ def div_phrase(config, phrase):
 	return result.render()
 
 
-def detail_song(song):
-	d = _doc(text.doc_prefix + 'Song !!!(name)')
+def detail_song(origin, song):
+	d = _doc(text.doc_prefix + 'Song !!!(name)', origin)
 	with d:
 		_detail_nested_content(song, 'no_op', _content_title) # TODO - define no_op() and change _content_title or else make this a real script... or else get rid of this entire function, which was really just an early proof-of-concept, anyway
 	
@@ -120,8 +120,8 @@ _js_ws = lambda ws_url: raw(f'var ws = new WebSocket("{ws_url}");')
 _js_lpi = lambda lpi_id: raw(f'var g_lpi_id = {lpi_id}')
 _js_show_hidden = lambda show_hidden: raw(f'var g_show_hidden = {"true" if show_hidden else "false"}')
 
-def drive(ws_url, data):
-	d = _doc(text.doc_prefix + f'Drive {data.production["name"]}', ('common.css', 'driver.css'))
+def drive(origin, ws_url, data):
+	d = _doc(text.doc_prefix + f'Drive {data.production["name"]}', origin, ('common.css', 'driver.css'))
 	with d:
 		with t.body():
 			with t.div(cls = 'header'):
@@ -138,7 +138,7 @@ def drive(ws_url, data):
 					#TODO: add "final adder" (for appending an arrangement)
 				with t.div(cls = 'right-rest highlight_container', id = 'arrangement_content'):
 					_detail_nested_content(data.first_arrangement_content, 'drive_live_phrase', _content_title)
-					t.div('<blank>', cls = 'buttonish', onclick = 'select_blank()')
+					t.div('<blank---->', cls = 'buttonish', onclick = 'select_blank()')
 			with t.div(cls = 'footer'):
 				t.div('Footer here...')
 				#t.hr()
@@ -147,13 +147,13 @@ def drive(ws_url, data):
 
 		t.script(_js_ws(ws_url))
 		t.script(_js_lpi(data.lpi_id))
-		add_scripts(('basic.js', 'ws.js', 'drive.js', 'common.js'))
+		add_scripts(origin, ('basic.js', 'ws.js', 'drive.js', 'common.js'))
 
 	return d.render()
 
 
-def watch(ws_url, data, show_hidden, cut_frame):
-	d = _doc(text.doc_prefix + f'Watch {data.production["name"]}', ('watcher.css',))
+def watch(origin, ws_url, data, show_hidden, cut_frame):
+	d = _doc(text.doc_prefix + f'Watch {data.production["name"]}', origin, ('watcher.css',))
 	halfh_frame_frame_cls = 'halfh_frame_frame_cut'
 	if show_hidden or cut_frame:
 		halfh_frame_frame_cls = 'halfh_frame_frame'
@@ -175,12 +175,12 @@ def watch(ws_url, data, show_hidden, cut_frame):
 		t.script(_js_ws(ws_url))
 		t.script(_js_lpi(data.lpi_id))
 		t.script(_js_show_hidden(show_hidden))
-		add_scripts(('basic.js', 'ws.js', 'watch.js?bust=1'))
+		add_scripts(origin, ('basic.js', 'ws.js', 'watch.js?bust=1'))
 
 	return d.render()
 
-def edit_production(form, title, production = None, upcomings = None, templates = None):
-	d = _doc(text.doc_prefix + ('Edit ' if production else 'Create New ') + title, ('forms.css',))
+def edit_production(form, title, origin, production = None, upcomings = None, templates = None):
+	d = _doc(text.doc_prefix + ('Edit ' if production else 'Create New ') + title, origin, ('forms.css',))
 	with d:
 		if upcomings and not production: # only show upcomings when "creating" a new production (to avoid accidental duplicate creations)
 			with t.fieldset():
@@ -206,8 +206,8 @@ def edit_production(form, title, production = None, upcomings = None, templates 
 		title = _synthesize_title(a),
 	) for a in arrangements]
 '''
-def edit_production_arrangements(ws_url, form, production, arrangement_titles, first_arrangement_content, available_compositions):
-	d = _doc(text.doc_prefix + f"Edit {production['name']}", ('forms.css',))
+def edit_production_arrangements(ws_url, form, origin, production, arrangement_titles, first_arrangement_content, available_compositions):
+	d = _doc(text.doc_prefix + f"Edit {production['name']}", origin, ('forms.css',))
 	button = t.button('Edit', type = 'button', onclick = f"window.location.href='/edit_production/{production['id']}'")
 	with d:
 		t.div(cls = 'gray_screen hide', id = 'gray_screen_div', onclick = 'hide_dialogs()') # invisible at first; for big_focus_box dialog-box, later..
@@ -225,17 +225,17 @@ def edit_production_arrangements(ws_url, form, production, arrangement_titles, f
 				with t.div(cls = 'middle highlight_container', id = 'arrangement_content'):
 					_detail_nested_content(first_arrangement_content, 'noop', _content_title_with_edits, available_compositions) # NOTE: we're sending an arrangement_content here, where a composition_content is actually asked for!  This turns out to work, because the two structs are so similar, but ought to think about fixing....  (can't simply send the first child (composition_content)!)
 			with t.div(cls = 'footer'):
-				t.div('Footer here...')
+				t.div('Watch videos...', cls = 'buttonish footer_item', onclick = f'window.open("https://www.youtube.com/playlist?list=PLgDIhoudhZx_-txgbnFs6Iezqh8RW6d7S")')
 
 	with d:
 		t.script(_js_ws(ws_url))
-		add_scripts(('basic.js', 'ws.js', 'edit.js', 'common.js'))
+		add_scripts(origin, ('basic.js', 'ws.js', 'edit.js', 'common.js'))
 
 	return d.render()
 	
 
-def new_arrangement(form):
-	d = _doc(text.doc_prefix + 'Create New Arrangement', ('forms.css',))
+def new_arrangement(form, origin):
+	d = _doc(text.doc_prefix + 'Create New Arrangement', origin, ('forms.css',))
 	with d:
 		_arrangement_form('Create New Arrangement', form, t.button('Create', type = 'submit'))
 
@@ -243,29 +243,29 @@ def new_arrangement(form):
 		t.div(id = 'close_arrangements') # filled with arrangements that may already fit the bill, based on new arrangement composition selection / name
 
 		t.script(_js_ws(ws_url))
-		add_scripts(('basic.js', 'ws.js', 'edit.js'))
+		add_scripts(origin, ('basic.js', 'ws.js', 'edit.js'))
 
 	return d.render()
 
 # Utils ----------------------------------------------------
 
-def add_scripts(scripts):
+def add_scripts(origin, scripts):
 	for script in scripts:
-		t.script(src = settings.k_static_url + f'js/{script}')
+		t.script(src = origin + f'/static/js/{script}')
 
 
 k_cache_version = '?4'
-def _doc(title, css = None):
+def _doc(title, origin, css = None):
 	d = document(title = title)
 	with d.head:
 		t.meta(name = 'viewport', content = 'width=device-width, initial-scale=1')
 		t.link(href = "https://fonts.googleapis.com/css?family=Germania+One", rel = 'stylesheet')
 		t.link(href = "https://fonts.googleapis.com/css?family=Carter+One", rel = 'stylesheet')
 		#t.link(href = "https://fonts.googleapis.com/css2?family=Alfa+Slab+One", rel = 'stylesheet') # TODO: DOWNLOAD! Don't depend on Internet!
-		t.link(href = settings.k_static_url + 'css/common.css' + k_cache_version, rel = 'stylesheet')
+		t.link(href = origin + '/static/css/common.css' + k_cache_version, rel = 'stylesheet')
 		if css:
 			for c in css:
-				t.link(href = settings.k_static_url + f'css/{c}' + k_cache_version, rel = 'stylesheet')
+				t.link(href = origin + f'/static/css/{c}' + k_cache_version, rel = 'stylesheet')
 	return d
 
 _form = lambda form, div_id: t.form(id = div_id, action = form.action, method = 'post') # a normal "post" form
@@ -318,12 +318,12 @@ def _arrangement_form(legend, form, button):
 			fg.add(button)
 	return result
 
-def _content_title(content, first, _): # 'available_compositions' not used, but this function implements an interface; requires 3rd arg
+def _content_title(content, _, __): # implements interface (content, first, penultimate), like _content_title_with_edits() but `first` argument is not used herein
 	if content.title:
 		# Abandonning the 'clickability' status of titles (like "verse 1") - it just confuses matters when live... so, no more: t.div(t.b(content.title), onclick = f'drive_live_composition_id("{content.composition_id}")', cls = 'buttonish')
 		t.div(t.b(content.title))
 
-def _content_title_with_edits(content, first, available_compositions):
+def _content_title_with_edits(content, first, penultimate):
 	if content and content.title:
 		with t.div(cls = 'button_band'):
 			t.div(content.title, cls = 'text') # text first, here, before buttons
@@ -334,7 +334,17 @@ def _content_title_with_edits(content, first, available_compositions):
 				t.button('-', cls = 'push', title = 'remove this block from the composition', onclick = f'remove_composition({acid})')
 				t.button('+', title = 'insert content just ABOVE of this block', onclick = f'show_available_content_div({acid})')
 				t.button('▲', title = 'move this block UP in the composition', onclick = f'move_composition_up({acid})')
-				t.button('▼', title = 'move this block DOWN in the composition', onclick = f'move_composition_down({acid})')
+				if not penultimate:
+					t.button('▼', title = 'move this block DOWN in the composition', onclick = f'move_composition_down({acid})')
+
+# TODO: just put this logic into _content_title_with_edits, but using 'ultimate' like 'penultimate', or something, to narrow the buttons down to '+' for the ultimate slide, which may even be something other than a blank!  There's no need to be blank-aware here!
+def _content_title_last_blank(content, _, __): # implements interface (content, first, penultimate), like _content_title_with_edits() but `first` argument is not used herein
+	# This "last blank" block wants to remain at the bottom; no '-' button or '▲' or '▼' buttons; just the ability to use the '+' button to add content here at the bottom of the arrangement
+	with t.div(cls = 'button_band'):
+		t.div(content.title, cls = 'text')
+		t.div('... Click the "+" to add content –►', cls = 'text push') # text first, here, before buttons
+		t.button('+', title = 'insert content just ABOVE of this block', onclick = f'show_available_content_div({content.arrangement_composition_id})')
+
 
 def _filter_field(input_name, placeholder, onchange):
 	result = t.div(cls = 'button_band')
@@ -393,7 +403,7 @@ composition_content:
 	phrases = await _get_phrases(dbc, arrangement['composition_id']), # may be empty list []!
 	children = [await get_composition_content(dbc, child['composition']) for child in await fetchall(dbc, ('select composition from arrangement_composition where arrangement = ? order by seq', (arrangement['arrangement_id'],)))],
 '''
-def _detail_nested_content(composition_content, click_script, content_titler, available_compositions = None, highlight_arrangement_composition_id = None, first = True):
+def _detail_nested_content(composition_content, click_script, content_titler, available_compositions = None, highlight_arrangement_composition_id = None, first = True, penultimate = False):
 	result = t.div()
 	# Set the "highlighted" content:
 	if hasattr(composition_content, 'arrangement_composition_id'): # first (hasattr) check is necessary because the first call in is often actually an arrangement_content, not a composition_content
@@ -427,20 +437,32 @@ def _detail_nested_content(composition_content, click_script, content_titler, av
 	# Render the content:
 	if composition_content:
 		with result:
-			content_titler(composition_content, first, available_compositions)
+			content_titler(composition_content, first, penultimate)
 			for phrase in composition_content.phrases:
 				# !!! phrase.phrase['display_scheme'] == 1 ?!
 				phrase_id = phrase.phrase['id']
 				div_id = f'phrase_{composition_content.arrangement_composition_id}_{phrase_id}'
-				with t.div(id = div_id, onclick = f'{click_script}("{div_id}", {phrase_id})', cls = 'buttonish') if click_script else t.div(id = div_id, cls = 'pseudobuttonish'):
+				cs = 'select_blank()' if phrase.phrase['display_scheme'] == 3 else click_script # TODO: replace hardcode "3" with map from display_scheme DB table!
+				with t.div(id = div_id, onclick = f'{cs}("{div_id}", {phrase_id})', cls = 'buttonish') if cs else t.div(id = div_id, cls = 'pseudobuttonish'):
 					for content in phrase.content:
-						if not content['content'].startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
-							t.div(content['content'])
+						txt = str(content['content'])
+						if not txt.startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
+							t.div(txt)
 			t.hr()
-			for child in composition_content.children:
-				t.div(_detail_nested_content(child, click_script, content_titler, available_compositions, highlight_arrangement_composition_id, False))
-			if first: # put a blank at the bottom of all top-level arrangements...
-				t.div('<blank>', cls = 'buttonish', onclick = 'select_blank()')
+			children = composition_content.children
+			if children and content_titler == _content_title_with_edits:
+				children = children[:-1] # if editing, treat the last (blank) differently - allow it to have a '+' button (below)
+			penultimate = None
+			if children: # if there are still children, then there's a penultimate remaining:
+				penultimate = children[-1]
+				children = children[:-1]
+			for child in children:
+				t.div(_detail_nested_content(child, click_script, content_titler, available_compositions, highlight_arrangement_composition_id, False, False))
+			if penultimate:
+				t.div(_detail_nested_content(penultimate, click_script, content_titler, available_compositions, highlight_arrangement_composition_id, False, True))
+			if first and content_titler == _content_title_with_edits and composition_content.children: # `first` really means "top", here - that is, the top level entry point into this function, and not one of the recursive calls in 'for child in children' loop
+				t.div(_detail_nested_content(composition_content.children[-1], click_script, _content_title_last_blank, available_compositions, highlight_arrangement_composition_id, False, False))
+
 	return result
 
 

@@ -93,7 +93,7 @@ function reset_video() {
 	ws_send({task: "drive", action: "reset_video"});
 }
 
-function select_blank() {
+function select_blank(_div_id, _phrase_id) { // unused div_id and phrase_id, but interface is required
 	ws_send({task: "drive", action: "select_blank"});
 }
 

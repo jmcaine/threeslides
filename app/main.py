@@ -190,14 +190,14 @@ async def select_song(rq):
 	#TODO: session = await get_session(rq)
 	dbc = rq.app['db']
 	songs = await db.get_compositions_by_tag_name(dbc, 'Song')
-	return hr(html.select_song(songs))
+	return hr(html.select_song(_origin(rq), songs))
 
 @rt.get('/select_song_arrangement')
 async def select_song_arrangement(rq):
 	#TODO: session = await get_session(rq)
 	dbc = rq.app['db']
 	arrangements = await db.get_arrangements_by_tag_name(dbc, 'Song')
-	return hr(html.select_song_arrangement(arrangements))
+	return hr(html.select_song_arrangement(_origin(rq), arrangements))
 
 
 @rt.get('/detail/song/{composition_id}')
@@ -206,7 +206,7 @@ async def detail_song(rq):
 	composition_id = rq.match_info['composition_id']
 	dbc = rq.app['db']
 	song = await db.get_composition_content(dbc, composition_id)
-	return hr(html.detail_song(song))
+	return hr(html.detail_song(_origin(rq), song))
 
 @rt.get('/detail/song_arrangement/{arrangement_id}')
 async def detail_song_arrangement(rq):
@@ -214,7 +214,7 @@ async def detail_song_arrangement(rq):
 	arrangement_id = rq.match_info['arrangement_id']
 	dbc = rq.app['db']
 	song = await db.get_arrangement_content(dbc, arrangement_id)
-	return hr(html.detail_song(song))
+	return hr(html.detail_song(_origin(rq), song))
 
 
 @rt.get('/drive/{production_id}')
@@ -222,7 +222,7 @@ async def drive(rq):
 	#TODO: session = await get_session(rq)
 	
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
-	return hr(html.drive(_ws_url(rq), lp))
+	return hr(html.drive(_origin(rq), _ws_url(rq), lp))
 
 
 @rt.get('/watch/{production_id}')
@@ -232,7 +232,7 @@ async def watch(rq):
 	session = await get_session(rq)
 	session['config'] = {'show_hidden': show_hidden, 'cut_frame': cut_frame}
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
-	return hr(html.watch(_ws_url(rq), lp, show_hidden, cut_frame))
+	return hr(html.watch(_origin(rq), _ws_url(rq), lp, show_hidden, cut_frame))
 
 
 # ------------------------
@@ -251,7 +251,7 @@ class Edit_Production_Service(web.View):
 			upcomings = await db.get_coming_productions(z.dbc)
 			templates = await db.get_production_templates(z.dbc) # TODO: add site-id, to filter particular site's own templates!
 
-		return hr(html.edit_production(html.Form(z.rq.rel_url), self._title(), production, upcomings, templates))
+		return hr(html.edit_production(html.Form(z.rq.rel_url), self._title(), _origin(self.request), production, upcomings, templates))
 
 	async def post(self):
 		z = await _set_up_common_post(self.request)
@@ -279,7 +279,7 @@ class Edit_Production_Service(web.View):
 			else:
 				production = None
 				templates = await db.get_production_templates(z.dbc) # TODO: add site-id, to filter particular site's own templates!
-			return hr(html.edit_production(html.Form(z.rq.rel_url, z.data, invalids), self._title(), production, None, templates))
+			return hr(html.edit_production(html.Form(z.rq.rel_url, z.data, invalids), self._title(), _origin(self.request), production, None, templates))
 
 @rt.get('/create_production', name = 'create_production')
 async def create_production(rq):
@@ -314,7 +314,7 @@ async def edit_production_arrangements(rq):
 	arrangement_titles = await db.get_production_arrangement_titles(z.dbc, pid)
 	first_arrangement_content = await db.get_arrangement_content(z.dbc, arrangement_titles[0].arrangement_id) if arrangement_titles else None
 	available_compositions = await db.get_available_compositions(z.dbc, arrangement_titles[0].arrangement_id) if arrangement_titles else None
-	return hr(html.edit_production_arrangements(_ws_url(z.rq), html.Form(z.rq.rel_url), production, arrangement_titles, first_arrangement_content, available_compositions))
+	return hr(html.edit_production_arrangements(_ws_url(z.rq), html.Form(z.rq.rel_url), _origin(rq), production, arrangement_titles, first_arrangement_content, available_compositions))
 
 
 
@@ -402,6 +402,13 @@ async def ws(rq):
 # Utils ----------------------------------------
 
 _gurl = lambda rq, name, parts = {}: str(rq.app.router[name].url_for(**parts))
+
+def _origin(rq):
+	result = rq.url
+	if settings.debug:
+		result = URL.build(scheme = result.scheme, host = result.host, port = 8001) # a bit of a kludge - comes from using adev, normally, for debugging, which serves static on a different port
+	return str(result.origin())
+
 
 def _ws_url(rq, name = None):
 	# Builds a url from `rq` (host part, mainly) and `name`, as a websocket-schemed version; e.g.
@@ -495,28 +502,27 @@ async def _ws_drive(hd):
 			l.error(f'''Action "{hd.payload['action']}" not recognized!''')
 
 async def _send_phrase_to_watchers(hd, phrase):
-	if phrase.content[0]['content'].endswith('.jpg'): # TODO: KLUDGY
-		image = settings.k_static_url + f"images/{phrase.content[0]['content']}"
+	origin = _origin(hd.rq)
+	txt = str(phrase.content[0]['content']) if phrase.content and len(phrase.content) >= 1 else ''
+	if txt.endswith('.jpg'): # TODO: KLUDGY
+		image = origin + f"/static/images/{txt}"
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': image}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
-	elif phrase.content[0]['content'].endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
-		video = settings.k_static_url + f"videos/{phrase.content[0]['content']}"
+	elif txt.endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
+		video = origin + f"/static/videos/{txt}"
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': video, 'repeat': 0}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
 	else:
-		if phrase and phrase.content and len(phrase.content) == 1 and phrase.content[0]['content'] == '.': # the entire contents being a simple '.' means that this is to be a "blank"! (likewise, a chord line starts with '['; if this is a 1-liner that is a chord line alone, then we'll make it a "blank" line)
-			await asyncio.gather(*[ws.send_json({'task': 'set_live_content_blank'}) for ws in hd.lpi.watchers.keys()])
-		else:
-			sends = []
-			for ws, watcher in hd.lpi.watchers.items(): # TODO: separate "royal watchers" from plebians?
-				sends.append(ws.send_json({
-					'task': 'set_live_content',
-					'display_scheme': phrase.phrase['display_scheme'],
-					'content': html.div_phrase(watcher.config, phrase), # would be more efficient to call this just once (or once per config?!), but that's just it: the number of possibilities for different views on this, based on configs, could be ridiculous; might-as-well just construct each for each watcher
-					#TODO: 'bg': bg,
-				}))
-				# TODO: check now, after each, to see if there are more drive messages on the pipe that might just render these null and void?  Then abandon the dispersal until new drive message(s) are folded in?
-			await asyncio.gather(*sends)
+		sends = []
+		for ws, watcher in hd.lpi.watchers.items(): # TODO: separate "royal watchers" from plebians?
+			sends.append(ws.send_json({
+				'task': 'set_live_content',
+				'display_scheme': phrase.phrase['display_scheme'],
+				'content': html.div_phrase(watcher.config, phrase), # would be more efficient to call this just once (or once per config?!), but that's just it: the number of possibilities for different views on this, based on configs, could be ridiculous; might-as-well just construct each for each watcher
+				#TODO: 'bg': bg,
+			}))
+			# TODO: check now, after each, to see if there are more drive messages on the pipe that might just render these null and void?  Then abandon the dispersal until new drive message(s) are folded in?
+		await asyncio.gather(*sends)
 		
 
 async def _send_new_live_phrase_id_to_other_drivers(hd, div_id):
@@ -535,12 +541,13 @@ async def _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, conten
 
 async def _send_new_bg_to_watchers(hd, background):
 	if background: # no-op, otherwise
+		origin = _origin(hd.rq)
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		if background.endswith('.jpg'):
-			bg = settings.k_static_url + f'bgs/{background}'
+			bg = origin + f'/static/bgs/{background}'
 			await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': bg}) for ws in hd.lpi.watchers.keys()])
 		elif background.endswith('.mp4'):
-			bg = settings.k_static_url + f'bgs/videos/{background}'
+			bg = origin + f'/static/bgs/videos/{background}'
 			await asyncio.gather(*[ws.send_json({'task': 'video', 'video': bg, 'repeat': 1}) for ws in hd.lpi.watchers.keys()])
 
 async def _handle_announcements_arrangement(hd, arrangement_id):
@@ -582,7 +589,7 @@ async def _ws_edit(hd):
 		case 'filter_backgrounds':
 			images = await db.get_background_images(hd.dbc, hd.payload['strng'])
 			videos = await db.get_background_videos(hd.dbc, hd.payload['strng'])
-			result_content = html.build_background_filter_result_content(images, videos)
+			result_content = html.build_background_filter_result_content(_origin(hd.rq), images, videos)
 			await hd.ws.send_json({'task': 'background_filter_results', 'result_content': result_content})
 		case 'set_bg_media':
 			result = await db.set_background_media(hd.dbc, int(hd.payload['arrangement_id']), hd.payload['filename'])
@@ -673,8 +680,7 @@ from os import listdir
 _announcements = listdir('static/images/announcements')
 async def _ws_fetch_new_announcement(hd):
 	global g_announcement_id # TODO: use hd instead
-	path = f'images/announcements/{_announcements[g_announcement_id]}'
-	url = settings.k_static_url + path
+	url = _origin(hd.rq) + f'/static/images/announcements/{_announcements[g_announcement_id]}'
 	g_announcement_id += 1
 	g_announcement_id %= len(_announcements)
 	await asyncio.gather(*[ws.send_json({'task': 'next_announcement', 'url': url}) for ws in hd.lpi.watchers.keys()])

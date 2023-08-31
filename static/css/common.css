@@ -24,12 +24,17 @@
 	flex: 0 0 auto; /* set to NOT flex (within full-screen... */
 	height: 40px;
 }
-.header {
+.header, .footer {
 	display: flex; /* children will stack in a row */
 	flex-flow: row-reverse nowrap;
 }
-.header_item {
+.footer {
+	display: flex; /* children will stack in a row */
+	flex-flow: row nowrap;
+}
+.header_item, .footer_item {
 	color: blue;
+	line-height: 10px; /* strange; would think the same height as .header (40px) would achieve the vertical-centering wanted, but probably the (heightless) 'buttonish' class has something to do with this; TODO: fix this / understand it! */
 }
 
 
