@@ -268,7 +268,9 @@ async def remove_arrangement_from_production(dbc, production_arrangement_id):
 
 async def get_available_compositions(dbc, arrangement_id):
 	compositions = await fetchall(dbc, ('select composition.id, title.title as title from composition join arrangement on parent = arrangement.composition join title on composition.title = title.id where arrangement.id = ? order by seq', (arrangement_id,)))
-	return [(c['title'], c['id']) for c in compositions]
+	result = [(c['title'], c['id']) for c in compositions]
+	result.append(('<blank>', 2833)) # TODO replace 2833 hardcode!
+	return result
 
 async def get_compositions_and_arrangements(dbc, strng):
 	joins = [_j_arrangement_title, _j_composition, _j_composition_title_2]

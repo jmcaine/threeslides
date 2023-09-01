@@ -1,5 +1,7 @@
 var g_live_phrase = null;
 var g_live_arrangement = null;
+var g_double_click_guard_reset_id = null;
+var g_double_click_guard = false;
 
 ws.onmessage = function(event) {
 	var payload = JSON.parse(event.data);
@@ -62,9 +64,19 @@ function set_live_phrase(div) {
 	ac.scrollTo({top: g_live_phrase.offsetTop - ac.offsetTop - 150, behavior: 'smooth'});
 }
 
+function _reset_double_click_guard() {
+	g_double_click_guard = false;
+}
+
 function drive_live_phrase(div_id, phrase_id) {
-	set_live_phrase($(div_id));
-	ws_send({task: "drive", action: "live_phrase_id", div_id: div_id, phrase_id: phrase_id});
+	if (g_double_click_guard == false) { // only proceed if this isn't an (accidental) "double-click"
+		clearTimeout(g_double_click_guard_reset_id); // just a safeguard - if g_double_click_guard==false, as determined above, it's likely because _reset_double_click_guard() has already been called, on it's timeout; but it's possible that there's a corner case where the timeout is still ticking down.  In any event, it's safe to call clearTimeout() regardless of whether g_double_click_guard_reset_id has already timed out, has been cleared, or is even possibly 'null' instead of a real value (e.g., first time through).   That is, this is safe in all cases.
+		g_double_click_guard = true;
+		g_double_click_guard_reset_id = setTimeout(_reset_double_click_guard, 1000);
+
+		set_live_phrase($(div_id));
+		ws_send({task: "drive", action: "live_phrase_id", div_id: div_id, phrase_id: phrase_id});
+	}
 }
 
 function drive_arrangement(div_id, arrangement_id) {

@@ -1,15 +1,21 @@
 
 var g_dual_frame = false;
-var g_top_or_bottom = 0; // "top"
 //var g_bg_image = new Image();
 //g_bg_image.src = "http://localhost:8001/static/bgs/wallowas1.JPG?v=1";
 
-const c_full_frame_slides = ['full_frame_slide_A', 'full_frame_slide_B'];
-const c_half_frame_slides = ['top_frame_slide_A', 'bottom_frame_slide_A', 'top_frame_slide_B', 'bottom_frame_slide_B']
-const c_half_frame_opposites = ['top_frame_slide_A', 'bottom_frame_slide_A', 'top_frame_slide_B', 'bottom_frame_slide_B']
-var g_current_full_frame_slide = 0;
-var g_current_half_frame_slide = 0;
+//const c_full_frame_slides = ['full_frame_slide_A', 'full_frame_slide_B'];
+//const c_half_frame_slides = ['top_frame_slide_A', 'bottom_frame_slide_A', 'top_frame_slide_B', 'bottom_frame_slide_B']
+//const c_half_frame_opposites = ['top_frame_slide_A', 'bottom_frame_slide_A', 'top_frame_slide_B', 'bottom_frame_slide_B']
+//var g_current_full_frame_slide = 0;
+
 var g_announcement_interval = null;
+var g_fade_timeout_id = null;
+
+var g_fading_frame = null;
+var g_current_frame = null;
+var g_next_frame = null;
+var g_later_frame = null;
+
 
 ws.onmessage = function(event) {
 	var payload = JSON.parse(event.data);
@@ -58,8 +64,7 @@ ws.onmessage = function(event) {
 			set_live_content(1, "", 0); // TODO: fix hardcodes!
 			break;
 		case "init":
-			ws_send({task: "init", lpi_id: g_lpi_id}); // lpi_id was set at top of scripts, upon crafting initial page, and now needs to be sent ('back') to ws handler
-			ws_send({task: "add_watcher"});
+			init();
 			break;
 		case "start_announcements":
 			start_announcements();
@@ -81,14 +86,27 @@ function _reid(f1, f1_new_id, f2, f2_new_id) {
 	f2.id = f2_new_id;
 }
 
+function init() {
+	ws_send({task: "init", lpi_id: g_lpi_id}); // lpi_id was set at top of scripts, upon crafting initial page, and now needs to be sent ('back') to ws handler
+	ws_send({task: "add_watcher"});
+	clear();
+}
+
 function clear() {
-	$('top_back_frame').innerHTML = '';
-	$('top_front_frame').innerHTML = '';
-	$('bottom_back_frame').innerHTML = '';
-	$('bottom_front_frame').innerHTML = '';
-	$('main_back_frame').innerHTML = '';
-	$('main_front_frame').innerHTML = '';
-	g_top_or_bottom = 0;
+	// we could set these in init(), but then a different random frame would always be "next" after a clear, and, after a clear, we always want g_current_frame to be next
+	g_next_frame = $('top_front_frame');
+	g_later_frame = $('bottom_front_frame');
+	g_fading_frame = $('top_back_frame');
+	g_current_frame = $('bottom_back_frame');
+
+	g_current_frame.style.opacity = 0;
+	g_current_frame.innerHTML = '';
+	g_next_frame.style.opacity = 0;
+	g_next_frame.innerHTML = '';
+	g_later_frame.style.opacity = 0;
+	g_later_frame.innerHTML = '';
+	g_fading_frame.style.opacity = 0;
+	g_fading_frame.innerHTML = '';
 }
 
 function reset() {
@@ -155,38 +173,39 @@ function next_announcement(url) {
 	document.body.style.backgroundImage = "url('" + url + "')";
 }
 
+function _fade() {
+	g_fading_frame.style.opacity = 0; // fades out, based on css transition
+}
+
+
 function set_live_content(display_scheme, content, bg) {
-	// TODO: DON'T flip frames if the content is "empty" (blank) -- REALLY?!?!
+
+	_fade(); // may already be done, but this is a failsafe; in case _fade() timeout hasn't yet been reached
+	clearTimeout(g_fade_timeout_id); // this works even if g_fade_timeout_id is (still) null
 	if (display_scheme == 1) { // TODO: remove hardcode; 1 is "dual"
 		if (g_dual_frame == false) {
+			// TODO: convert to new style!
 			$('main_back_frame').style.opacity = 0; // fades out, based on css 'transition'
 			$('main_front_frame').style.opacity = 0; // fades out, based on css 'transition'
 			g_dual_frame == true;
 		}
-		if (g_top_or_bottom == 0) { // top
-			bf = $('top_back_frame');
-			ff = $('top_front_frame');
-			g_top_or_bottom = 1; // bottom, now (next)
-		}
-		else { // bottom
-			bf = $('bottom_back_frame');
-			ff = $('bottom_front_frame');
-			g_top_or_bottom = 0; // top, now (next)
-		}
-		bf.innerHTML = content;
-		bf.style.opacity = 1; // fades in, based on css transition
-		ff.style.opacity = 0; // fades out, based on css transition
-		setTimeout(_reid(bf, ff.id, ff, bf.id), 2000); // probably the 2-second delay isn't necessary on all browsers, but, just in case....
+
+		f = g_fading_frame; // old, previous "fading frame" (now all faded and useless for a couple more )
+		g_fading_frame = g_current_frame;
+		g_current_frame = g_next_frame;
+		g_current_frame.innerHTML = content;
+		g_current_frame.style.opacity = 1; // fades in, based on css transition
+		g_next_frame = g_later_frame;
+		g_later_frame = f;
+
+		//_reid(bf, ff.id, ff, bf.id); //setTimeout(_reid(bf, ff.id, ff, bf.id), 2000); // probably the 2-second delay isn't necessary on all browsers, but, just in case....
+		g_fade_timeout_id = setTimeout(_fade, 2000);
 	}
 	else {
 		$('full_back_frame').innerHTML = content;
+		// TODO: test and finish!!!
 		if (g_dual_frame == true) { // transition from dual-frame
-			$('top_back_frame').style.opacity = 0;
-			$('top_front_frame').style.opacity = 0;
-			$('bottom_back_frame').style.opacity = 0;
-			$('bottom_front_frame').style.opacity = 0;
-			//$('full_front_frame').style.opacity = 1;
-			//'main_frame' ?
+			clear();
 			g_dual_frame == false;
 		}
 	}

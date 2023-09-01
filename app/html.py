@@ -138,7 +138,6 @@ def drive(origin, ws_url, data):
 					#TODO: add "final adder" (for appending an arrangement)
 				with t.div(cls = 'right-rest highlight_container', id = 'arrangement_content'):
 					_detail_nested_content(data.first_arrangement_content, 'drive_live_phrase', _content_title)
-					t.div('<blank---->', cls = 'buttonish', onclick = 'select_blank()')
 			with t.div(cls = 'footer'):
 				t.div('Footer here...')
 				#t.hr()
