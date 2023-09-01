@@ -174,6 +174,7 @@ function next_announcement(url) {
 }
 
 function _fade() {
+	g_fading_frame.style.transition = 'opacity 2.5s ease';
 	g_fading_frame.style.opacity = 0; // fades out, based on css transition
 }
 
@@ -194,12 +195,13 @@ function set_live_content(display_scheme, content, bg) {
 		g_fading_frame = g_current_frame;
 		g_current_frame = g_next_frame;
 		g_current_frame.innerHTML = content;
+		g_fading_frame.style.transition = 'opacity 1s ease';
 		g_current_frame.style.opacity = 1; // fades in, based on css transition
 		g_next_frame = g_later_frame;
 		g_later_frame = f;
 
 		//_reid(bf, ff.id, ff, bf.id); //setTimeout(_reid(bf, ff.id, ff, bf.id), 2000); // probably the 2-second delay isn't necessary on all browsers, but, just in case....
-		g_fade_timeout_id = setTimeout(_fade, 2000);
+		g_fade_timeout_id = setTimeout(_fade, 700);
 	}
 	else {
 		$('full_back_frame').innerHTML = content;
