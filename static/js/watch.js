@@ -201,7 +201,7 @@ function set_live_content(display_scheme, content, bg) {
 		g_later_frame = f;
 
 		//_reid(bf, ff.id, ff, bf.id); //setTimeout(_reid(bf, ff.id, ff, bf.id), 2000); // probably the 2-second delay isn't necessary on all browsers, but, just in case....
-		g_fade_timeout_id = setTimeout(_fade, 700);
+		g_fade_timeout_id = setTimeout(_fade, 3000);
 	}
 	else {
 		$('full_back_frame').innerHTML = content;
