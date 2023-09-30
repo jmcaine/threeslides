@@ -59,8 +59,8 @@ def select_song_arrangement(origin, arrangements):
 	return d.render()
 
 
-def detail_nested_content(composition_content, click_script, content_titler, available_compositions, highlight_arrangement_composition_id = None):
-	return _detail_nested_content(composition_content, click_script, content_titler, available_compositions, highlight_arrangement_composition_id).render()
+def detail_nested_content(origin, composition_content, click_script, content_titler, available_compositions, highlight_arrangement_composition_id = None):
+	return _detail_nested_content(origin, composition_content, click_script, content_titler, available_compositions, highlight_arrangement_composition_id).render()
 
 def build_left_arrangement_titles(arrangement_titles, click_script, buttons, production_arrangement_id_to_highlight = None):
 	return _build_left_arrangement_titles(arrangement_titles, click_script, buttons, production_arrangement_id_to_highlight).render()
@@ -111,7 +111,7 @@ def div_phrase(config, phrase):
 def detail_song(origin, song):
 	d = _doc(text.doc_prefix + 'Song !!!(name)', origin)
 	with d:
-		_detail_nested_content(song, 'no_op', _content_title) # TODO - define no_op() and change _content_title or else make this a real script... or else get rid of this entire function, which was really just an early proof-of-concept, anyway
+		_detail_nested_content(origin, song, 'no_op', _content_title) # TODO - define no_op() and change _content_title or else make this a real script... or else get rid of this entire function, which was really just an early proof-of-concept, anyway
 	
 	return d.render()
 
@@ -137,7 +137,7 @@ def drive(origin, ws_url, data):
 					_build_left_arrangement_titles(data.arrangement_titles, 'drive_arrangement', False)
 					#TODO: add "final adder" (for appending an arrangement)
 				with t.div(cls = 'right-rest highlight_container', id = 'arrangement_content'):
-					_detail_nested_content(data.first_arrangement_content, 'drive_live_phrase', _content_title)
+					_detail_nested_content(origin, data.first_arrangement_content, 'drive_live_phrase', _content_title)
 			with t.div(cls = 'footer'):
 				t.div('Footer here...')
 				#t.hr()
@@ -222,7 +222,7 @@ def edit_production_arrangements(ws_url, form, origin, production, arrangement_t
 				with t.div(cls = 'left highlight_container', id = 'production_content'):
 					_build_left_arrangement_titles(arrangement_titles, 'load_arrangement', True)
 				with t.div(cls = 'middle highlight_container', id = 'arrangement_content'):
-					_detail_nested_content(first_arrangement_content, 'noop', _content_title_with_edits, available_compositions) # NOTE: we're sending an arrangement_content here, where a composition_content is actually asked for!  This turns out to work, because the two structs are so similar, but ought to think about fixing....  (can't simply send the first child (composition_content)!)
+					_detail_nested_content(origin, first_arrangement_content, 'noop', _content_title_with_edits, available_compositions) # NOTE: we're sending an arrangement_content here, where a composition_content is actually asked for!  This turns out to work, because the two structs are so similar, but ought to think about fixing....  (can't simply send the first child (composition_content)!)
 			with t.div(cls = 'footer'):
 				t.div('Watch videos...', cls = 'buttonish footer_item', onclick = f'window.open("https://www.youtube.com/playlist?list=PLgDIhoudhZx_-txgbnFs6Iezqh8RW6d7S")')
 
@@ -402,7 +402,7 @@ composition_content:
 	phrases = await _get_phrases(dbc, arrangement['composition_id']), # may be empty list []!
 	children = [await get_composition_content(dbc, child['composition']) for child in await fetchall(dbc, ('select composition from arrangement_composition where arrangement = ? order by seq', (arrangement['arrangement_id'],)))],
 '''
-def _detail_nested_content(composition_content, click_script, content_titler, available_compositions = None, highlight_arrangement_composition_id = None, first = True, penultimate = False):
+def _detail_nested_content(origin, composition_content, click_script, content_titler, available_compositions = None, highlight_arrangement_composition_id = None, first = True, penultimate = False):
 	result = t.div()
 	# Set the "highlighted" content:
 	if hasattr(composition_content, 'arrangement_composition_id'): # first (hasattr) check is necessary because the first call in is often actually an arrangement_content, not a composition_content
@@ -440,13 +440,18 @@ def _detail_nested_content(composition_content, click_script, content_titler, av
 			for phrase in composition_content.phrases:
 				# !!! phrase.phrase['display_scheme'] == 1 ?!
 				phrase_id = phrase.phrase['id']
-				div_id = f'phrase_{composition_content.arrangement_composition_id}_{phrase_id}'
 				cs = 'select_blank()' if phrase.phrase['display_scheme'] == 3 else click_script # TODO: replace hardcode "3" with map from display_scheme DB table!
-				with t.div(id = div_id, onclick = f'{cs}("{div_id}", {phrase_id})', cls = 'buttonish') if cs else t.div(id = div_id, cls = 'pseudobuttonish'):
+				div_id = phrase_div_id(composition_content.arrangement_composition_id, phrase_id)
+				onclick = f'{cs}("{div_id}", {composition_content.arrangement_composition_id}, {phrase_id})' if cs else ''
+				cls = 'buttonish' if cs else 'pseudobuttonish'
+				with t.div(id = div_id, onclick = onclick, cls = cls):
 					for content in phrase.content:
 						txt = str(content['content'])
 						if not txt.startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
-							t.div(txt)
+							if txt.endswith('.jpg'):
+								t.div(t.img(src = origin + f'/static/images/{txt}', width = 300))
+							else:
+								t.div(txt)
 			t.hr()
 			children = composition_content.children
 			if children and content_titler == _content_title_with_edits:
@@ -456,12 +461,13 @@ def _detail_nested_content(composition_content, click_script, content_titler, av
 				penultimate = children[-1]
 				children = children[:-1]
 			for child in children:
-				t.div(_detail_nested_content(child, click_script, content_titler, available_compositions, highlight_arrangement_composition_id, False, False))
+				t.div(_detail_nested_content(origin, child, click_script, content_titler, available_compositions, highlight_arrangement_composition_id, False, False))
 			if penultimate:
-				t.div(_detail_nested_content(penultimate, click_script, content_titler, available_compositions, highlight_arrangement_composition_id, False, True))
+				t.div(_detail_nested_content(origin, penultimate, click_script, content_titler, available_compositions, highlight_arrangement_composition_id, False, True))
 			if first and content_titler == _content_title_with_edits and composition_content.children: # `first` really means "top", here - that is, the top level entry point into this function, and not one of the recursive calls in 'for child in children' loop
-				t.div(_detail_nested_content(composition_content.children[-1], click_script, _content_title_last_blank, available_compositions, highlight_arrangement_composition_id, False, False))
+				t.div(_detail_nested_content(origin, composition_content.children[-1], click_script, _content_title_last_blank, available_compositions, highlight_arrangement_composition_id, False, False))
 
 	return result
 
 
+phrase_div_id = lambda ac_id, phrase_id: f'phrase_{ac_id}_{phrase_id}'

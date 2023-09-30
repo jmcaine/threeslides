@@ -449,13 +449,27 @@ async def _get_arrangement_content(hd, arrangement_id, click_script, content_tit
 	available_compositions = None # unless...
 	if include_available_compositions:
 		available_compositions = await db.get_available_compositions(hd.dbc, arrangement_id)
-	content_div = html.detail_nested_content(content, click_script, content_titler, available_compositions, highlight_arrangement_composition_id)
+	content_div = html.detail_nested_content(_origin(hd.rq), content, click_script, content_titler, available_compositions, highlight_arrangement_composition_id)
 	return content, content_div
 
 async def _send_arrangement_content(hd, arrangement_id, click_script, content_titler, include_available_compositions = False, highlight_arrangement_composition_id = None):
 	content, content_div = await _get_arrangement_content(hd, arrangement_id, click_script, content_titler, include_available_compositions, highlight_arrangement_composition_id)
 	await hd.ws.send_json({'task': 'set_arrangement_content', 'content': content_div})
 	return content
+
+async def _set_new_live_phrase(hd, ac_id, phrase_id, exclude_self = True):
+	hd.session['current_ac_id'] = ac_id # for next time 'round
+	hd.session['current_phrase_id'] = phrase_id # for next time 'round
+	phrase = await db.get_phrase(hd.dbc, phrase_id)
+	await _send_phrase_to_watchers(hd, phrase)
+	await _send_new_live_phrase_id_to_other_drivers(hd, html.phrase_div_id(ac_id, phrase_id), exclude_self)
+
+async def _set_x_phrase(func, hd):
+	ac_id = hd.session.get('current_ac_id')
+	phrase_id = await func(hd.dbc, ac_id, hd.session.get('current_phrase_id'))
+	if phrase_id:
+		await _set_new_live_phrase(hd, ac_id, phrase_id, False)
+	# else, do NOTHING! (probably at the end of the line - last phrase in the composition)
 
 async def _ws_drive(hd):
 	#TODO consider: from js: ws_send({task: "drive", action: "live", id: content_id});
@@ -470,11 +484,7 @@ async def _ws_drive(hd):
 		case 'clear':
 			await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		case 'live_phrase_id':
-			phrase_id = int(hd.payload['phrase_id'])
-			phrase = await db.get_phrase(hd.dbc, phrase_id)
-			div_id = hd.payload['div_id']
-			await _send_phrase_to_watchers(hd, phrase)
-			await _send_new_live_phrase_id_to_other_drivers(hd, div_id)
+			await _set_new_live_phrase(hd, int(hd.payload['ac_id']), int(hd.payload['phrase_id']))
 		case 'live_composition_id_DEPRECATE': # happens, e.g., when somebody clicks on "verse 3" ("header text", rather than clicking on the verse 3 "body")
 			# TODO: DEPRECATE; we don't use this any more!!
 			phrase = await db.get_composition_first_phrase(hd.dbc, int(hd.payload['composition_id']))
@@ -498,6 +508,10 @@ async def _ws_drive(hd):
 			await asyncio.gather(*[ws.send_json({'task': 'pause_video'}) for ws in hd.lpi.watchers.keys()])
 		case 'reset_video':
 			await asyncio.gather(*[ws.send_json({'task': 'reset_video'}) for ws in hd.lpi.watchers.keys()])
+		case 'forward':
+			await _set_x_phrase(db.get_next_phrase, hd)
+		case 'back':
+			await _set_x_phrase(db.get_previous_phrase, hd)
 		case _:
 			l.error(f'''Action "{hd.payload['action']}" not recognized!''')
 
@@ -525,11 +539,12 @@ async def _send_phrase_to_watchers(hd, phrase):
 		await asyncio.gather(*sends)
 		
 
-async def _send_new_live_phrase_id_to_other_drivers(hd, div_id):
+async def _send_new_live_phrase_id_to_other_drivers(hd, div_id, exclude_self = True):
+	exclusion = ws != hd.ws if exclude_self else True
 	await asyncio.gather(*[ws.send_json({
 		'task': 'update_live_phrase_id',
 		'div_id': div_id,
-	}) for ws in hd.lpi.drivers if ws != hd.ws])
+	}) for ws in hd.lpi.drivers if exclusion])
 
 async def _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, content):
 	_, content_div = await _get_arrangement_content(hd, arrangement_id, 'drive_live_phrase', html._content_title)
@@ -672,7 +687,7 @@ async def _send_production_content(hd, production_id, click_script, content_titl
 	available_compositions = None
 	if include_available_compositions and arrangement_content:
 		available_compositions = await db.get_available_compositions(hd.dbc, arrangement_content.arrangement_id)
-	arrangement_content_div = html.detail_nested_content(arrangement_content, click_script, content_titler, available_compositions)
+	arrangement_content_div = html.detail_nested_content(_origin(hd.rq), arrangement_content, click_script, content_titler, available_compositions)
 	await hd.ws.send_json({'task': 'set_production_and_arrangement_content', 'production_content': production_content_div, 'arrangement_content': arrangement_content_div})
 
 from os import listdir

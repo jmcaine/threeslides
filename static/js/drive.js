@@ -29,6 +29,15 @@ ws.onmessage = function(event) {
 	}
 };
 
+document.addEventListener('keydown', function(event) {
+	if (event.code == 'ArrowRight') {
+		ws_send({task: "drive", action: "forward"});
+	}
+	else if (event.code == 'ArrowLeft') {
+		ws_send({task: "drive", action: "back"});
+	}
+});
+
 function update_live_phrase_id(div_id) {
 	phrase_div = $(div_id);
 	if (phrase_div) {
@@ -68,14 +77,14 @@ function _reset_double_click_guard() {
 	g_double_click_guard = false;
 }
 
-function drive_live_phrase(div_id, phrase_id) {
+function drive_live_phrase(div_id, ac_id, phrase_id) {
 	if (g_double_click_guard == false) { // only proceed if this isn't an (accidental) "double-click"
 		clearTimeout(g_double_click_guard_reset_id); // just a safeguard - if g_double_click_guard==false, as determined above, it's likely because _reset_double_click_guard() has already been called, on it's timeout; but it's possible that there's a corner case where the timeout is still ticking down.  In any event, it's safe to call clearTimeout() regardless of whether g_double_click_guard_reset_id has already timed out, has been cleared, or is even possibly 'null' instead of a real value (e.g., first time through).   That is, this is safe in all cases.
 		g_double_click_guard = true;
 		g_double_click_guard_reset_id = setTimeout(_reset_double_click_guard, 1000);
 
 		set_live_phrase($(div_id));
-		ws_send({task: "drive", action: "live_phrase_id", div_id: div_id, phrase_id: phrase_id});
+		ws_send({task: "drive", action: "live_phrase_id", ac_id: ac_id, phrase_id: phrase_id});
 	}
 }
 
