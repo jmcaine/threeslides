@@ -30,10 +30,10 @@ ws.onmessage = function(event) {
 };
 
 document.addEventListener('keydown', function(event) {
-	if (event.code == 'PageDown') {
+	if (event.code == 'ArrowLeft') {
 		ws_send({task: "drive", action: "back"});
 	}
-	else if (event.code == 'PageUp') {
+	else if (event.code == 'ArrowRight') {
 		ws_send({task: "drive", action: "forward"});
 	}
 });
