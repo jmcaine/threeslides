@@ -74,8 +74,9 @@ def hr(text): return web.Response(text = text, content_type = 'text/html')
 # TEMP, DEBUG!!!!  (for running with:
 #   python -m aiohttp.web -H 0.0.0.0 -P 8080 app.main:init
 # "raw", and to get /static
-#if settings.debug:
-#	rt.static('/static', '/home/jmcaine/dev/ohs/ohs-test/static')
+if settings.debug:
+	l.debug('!!!! setting /static')
+	rt.static('/static', '/home/jmcaine/dev/projects/threeslides-aside/threeslides/static')
 
 
 def auth(roles):
@@ -406,7 +407,7 @@ _gurl = lambda rq, name, parts = {}: str(rq.app.router[name].url_for(**parts))
 def _origin(rq):
 	result = rq.url
 	if settings.debug:
-		result = URL.build(scheme = result.scheme, host = result.host, port = 8001) # a bit of a kludge - comes from using adev, normally, for debugging, which serves static on a different port
+		result = URL.build(scheme = result.scheme, host = result.host, port = 8080) # a bit of a kludge - comes from using adev, normally, for debugging, which serves static on a different port
 	return str(result.origin())
 
 
@@ -518,7 +519,7 @@ async def _ws_drive(hd):
 async def _send_phrase_to_watchers(hd, phrase):
 	origin = _origin(hd.rq)
 	txt = str(phrase.content[0]['content']) if phrase.content and len(phrase.content) >= 1 else ''
-	if txt.endswith('.jpg'): # TODO: KLUDGY
+	if txt.endswith('.jpg') or txt.endswith('.JPG'): # TODO: KLUDGY
 		image = origin + f"/static/images/{txt}"
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': image}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
