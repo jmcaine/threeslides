@@ -17,6 +17,11 @@ html, body {
 	/*transition: background-image 1.0s linear;*/
 }
 
+#the_video {
+	position: absolute;
+	width: 100%;
+}
+
 .full_frame {
 	position: absolute;
 	background-color: transparent;
