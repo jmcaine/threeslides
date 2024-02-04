@@ -255,7 +255,7 @@ def add_scripts(origin, scripts):
 		t.script(src = origin + f'/static/js/{script}')
 
 
-k_cache_version = '?4'
+k_cache_version = '?5'
 def _doc(title, origin, css = None):
 	d = document(title = title)
 	with d.head:
@@ -450,7 +450,7 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 					for content in phrase.content:
 						txt = str(content['content'])
 						if not txt.startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
-							if txt.endswith('.jpg'):
+							if txt.lower().endswith('.jpg'):
 								t.div(t.img(src = origin + f'/static/images/{txt}', width = 300))
 							else:
 								t.div(txt)

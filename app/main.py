@@ -519,7 +519,7 @@ async def _ws_drive(hd):
 async def _send_phrase_to_watchers(hd, phrase):
 	origin = _origin(hd.rq)
 	txt = str(phrase.content[0]['content']) if phrase.content and len(phrase.content) >= 1 else ''
-	if txt.endswith('.jpg') or txt.endswith('.JPG'): # TODO: KLUDGY
+	if txt.lower().endswith('.jpg'): # TODO: KLUDGY
 		image = origin + f"/static/images/{txt}"
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': image}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
@@ -559,10 +559,10 @@ async def _send_new_bg_to_watchers(hd, background):
 	if background: # no-op, otherwise
 		origin = _origin(hd.rq)
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
-		if background.endswith('.jpg'):
+		if background.lower().endswith('.jpg'):
 			bg = origin + f'/static/bgs/{background}'
 			await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': bg}) for ws in hd.lpi.watchers.keys()])
-		elif background.endswith('.mp4'):
+		elif background.lower().endswith('.mp4'):
 			bg = origin + f'/static/bgs/videos/{background}'
 			await asyncio.gather(*[ws.send_json({'task': 'video', 'video': bg, 'repeat': 1}) for ws in hd.lpi.watchers.keys()])
 
