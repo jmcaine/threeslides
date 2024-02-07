@@ -328,9 +328,6 @@ async def get_flat_composition_content(dbc, composition_id):
 		phrases = await _get_phrases(dbc, composition_id),
 	)
 
-async def _get_x_phrase():
-	pass
-
 _get_x_phrase = lambda comparator, desc_asc: f'select * from phrase join composition on composition.id = phrase.composition join arrangement_composition on arrangement_composition.composition = composition.id where arrangement_composition.id = ? and phrase.seq {comparator} (select seq from phrase where id = ?) order by seq {desc_asc} limit 1'
 
 async def get_next_phrase(dbc, ac_id, phrase_id):
