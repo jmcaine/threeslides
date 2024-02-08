@@ -194,7 +194,8 @@ function stop_announcements() {
 	}
 }
 function next_announcement(url) {
-	document.body.style.backgroundImage = "url('" + url + "')";
+	//document.body.style.backgroundImage = "url('" + url + "')";
+	set_background(url);
 }
 
 function _fade() {

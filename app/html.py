@@ -255,7 +255,7 @@ def add_scripts(origin, scripts):
 		t.script(src = origin + f'/static/js/{script}')
 
 
-k_cache_version = '?5'
+k_cache_version = '?v=6'
 def _doc(title, origin, css = None):
 	d = document(title = title)
 	with d.head:
