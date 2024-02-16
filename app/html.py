@@ -17,6 +17,8 @@ from . import valid
 from . import settings
 from . import text
 
+k_thumb_suffix = ".small.jpg"
+
 # Classes ---------------------------------------------------------------------
 
 class Form:
@@ -75,13 +77,14 @@ def build_arrangement_filter_result_content(results, before_production_arrangeme
 def build_background_filter_result_content(origin, images, videos):
 	def add_thumbnails(lst, path):
 		for i in lst:
-			fn = i.filename.removesuffix(".small.jpg") # thumbnails
+			fn = i.filename.removesuffix(k_thumb_suffix) # thumbnails
 			t.div(t.img(src = origin + f'/static/{path}/{i.filename}', width = 80), onclick = f'set_bg_media("{fn}")')
 
 	d = t.div(cls = 'thumbnails')
 	with d:
 		t.div('Images...')
 		add_thumbnails(images, 'bgs')
+		t.hr()
 		t.hr()
 		t.div('Videos:')
 		add_thumbnails(videos, 'bgs/videos')
@@ -117,8 +120,8 @@ def detail_song(origin, song):
 
 
 _js_ws = lambda ws_url: raw(f'var ws = new WebSocket("{ws_url}");')
-_js_lpi = lambda lpi_id: raw(f'var g_lpi_id = {lpi_id}')
-_js_show_hidden = lambda show_hidden: raw(f'var g_show_hidden = {"true" if show_hidden else "false"}')
+_js_lpi = lambda lpi_id: raw(f'var g_lpi_id = {lpi_id};')
+_js_show_hidden = lambda show_hidden: raw(f'var g_show_hidden = {"true" if show_hidden else "false"};')
 
 def drive(origin, ws_url, data):
 	d = _doc(text.doc_prefix + f'Drive {data.production["name"]}', origin, ('common.css', 'driver.css'))
@@ -197,6 +200,32 @@ def edit_production(form, title, origin, production = None, upcomings = None, te
 	return d.render()
 		
 
+def testquill(origin, ws_url):
+	d = _doc('test Quill', origin, ('quill.snow.css',))
+	with d:
+		#t.div(id = 'thing', style = "width: 400px; height: 300px;")
+		t.input_(type = 'file', id = 'file_input', multiple = 'true', hidden = 'true')
+		t.button('Save', type = 'button', onclick = 'save_delta_content()')
+		t.button('Load', type = 'button', onclick = 'fetch_delta_content()')
+
+		t.div(id = 'composition_content')
+
+		t.script(_js_ws(ws_url))
+		add_scripts(origin, ('basic.js', 'ws.js', 'quill.js', 'testquill.js'))
+	return d.render()
+
+def testpell(origin, ws_url):
+	d = _doc('test Pell', origin, ('pell.min.css',))
+	with d:
+		t.div('more stuff here', contenteditable = 'true')
+
+		t.input_(type = 'file', id = 'file_input', multiple = 'true', hidden = 'true')
+		t.div(id = 'composition_content')
+
+		t.script(_js_ws(ws_url))
+		add_scripts(origin, ('basic.js', 'ws.js', 'pell.min.js', 'testpell.js'))
+	return d.render()
+
 '''
 	return [U.Struct(
 		production_arrangement_id = a['production_arrangement_id'],
@@ -206,7 +235,7 @@ def edit_production(form, title, origin, production = None, upcomings = None, te
 	) for a in arrangements]
 '''
 def edit_production_arrangements(ws_url, form, origin, production, arrangement_titles, first_arrangement_content, available_compositions):
-	d = _doc(text.doc_prefix + f"Edit {production['name']}", origin, ('forms.css',))
+	d = _doc(text.doc_prefix + f"Edit {production['name']}", origin, ('forms.css', 'quill.snow.css')) # 'jodit.min.css'
 	button = t.button('Edit', type = 'button', onclick = f"window.location.href='/edit_production/{production['id']}'")
 	with d:
 		t.div(cls = 'gray_screen hide', id = 'gray_screen_div', onclick = 'hide_dialogs()') # invisible at first; for big_focus_box dialog-box, later..
@@ -217,7 +246,7 @@ def edit_production_arrangements(ws_url, form, origin, production, arrangement_t
 			with t.div(cls = 'flexrow center40'):
 				t.div(t.b(f"{production['name']} - {_format_date_time(production['scheduled'])}", cls = 'rowitem'))
 				#t.button('Edit', type = 'button', cls = 'rowitem', onclick = f"window.location.href='/edit_production/{production['id']}'")
-				t.a('(Edit...)', href = f"/edit_production/{production['id']}")
+				t.a('(Edit title/date...)', href = f"/edit_production/{production['id']}")
 			with t.div(cls = 'arrangements center40'): # cls 'main' in other contexts with 'left' and 'middle' panes
 				with t.div(cls = 'left highlight_container', id = 'production_content'):
 					_build_left_arrangement_titles(arrangement_titles, 'load_arrangement', True)
@@ -228,7 +257,7 @@ def edit_production_arrangements(ws_url, form, origin, production, arrangement_t
 
 	with d:
 		t.script(_js_ws(ws_url))
-		add_scripts(origin, ('basic.js', 'ws.js', 'edit.js', 'common.js'))
+		add_scripts(origin, ('basic.js', 'ws.js', 'quill.min.js', 'edit.js', 'common.js',)) # 'jodit.min.js', 'jodit/jodit-3.24.5/build/jodit.min.js', 'nicedit/nicEdit.js', 'tinymce/tinymce.min.js', 'editorjs/editorjs.mjs', OR JUST quill.js to TEST!
 
 	return d.render()
 	
@@ -260,7 +289,6 @@ def _doc(title, origin, css = None):
 		t.meta(name = 'viewport', content = 'width=device-width, initial-scale=1')
 		t.link(href = "https://fonts.googleapis.com/css?family=Germania+One", rel = 'stylesheet')
 		t.link(href = "https://fonts.googleapis.com/css?family=Carter+One", rel = 'stylesheet')
-		#t.link(href = "https://fonts.googleapis.com/css2?family=Alfa+Slab+One", rel = 'stylesheet') # TODO: DOWNLOAD! Don't depend on Internet!
 		t.link(href = origin + '/static/css/common.css' + k_cache_version, rel = 'stylesheet')
 		if css:
 			for c in css:
@@ -398,12 +426,14 @@ def _format_date_time(dt, include_time = True):
 composition_content:
 	arrangement_composition_id = arrangement_composition_id,
 	composition_id = arrangement['composition_id'],
+	content_type = arrangement['content_type'],
 	title = _synthesize_title(arrangement),
 	phrases = await _get_phrases(dbc, arrangement['composition_id']), # may be empty list []!
 	children = [await get_composition_content(dbc, child['composition']) for child in await fetchall(dbc, ('select composition from arrangement_composition where arrangement = ? order by seq', (arrangement['arrangement_id'],)))],
 '''
 def _detail_nested_content(origin, composition_content, click_script, content_titler, available_compositions = None, highlight_arrangement_composition_id = None, first = True, penultimate = False):
 	result = t.div()
+	rich_text = hasattr(composition_content, 'content_type') and composition_content.content_type == 2 # TODO: remove hardcode '2'!!!
 	# Set the "highlighted" content:
 	if hasattr(composition_content, 'arrangement_composition_id'): # first (hasattr) check is necessary because the first call in is often actually an arrangement_content, not a composition_content
 		if (first and highlight_arrangement_composition_id == None) or composition_content.arrangement_composition_id == highlight_arrangement_composition_id:
@@ -430,9 +460,21 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 					t.label('Title: ', fr = fr)
 					t.input_(type = 'text', id = fr, name = fr, placeholder = 'Type title here')
 					t.button('Cancel', cls = 'buttonish push', onclick = 'hide_content_text_div()')
-					t.button('Save', cls = 'buttonish', onclick = 'set_composition_content()')
+					t.button('Save', cls = 'buttonish', onclick = 'set_composition_content(false)')
 				t.hr()
-				t.textarea(id = 'composition_content_div', cls = 'full_width_height', placeholder = 'Type content here...')
+				t.textarea(id = 'composition_plain_content', cls = 'full_width_height', placeholder = 'Type content here...')
+			# BEGIN: !!!DUPLICATED code, from above, but "new style" content editor:
+			with t.div(id = 'content_rich_text_div', cls = 'biggest_focus_box hide'):
+				with t.div(cls = 'button_band'):
+					fr = 'edit_rich_content_title'
+					t.label('Title: ', fr = fr)
+					t.input_(type = 'text', id = fr, name = fr, placeholder = 'Type title here')
+					t.button('Cancel', cls = 'buttonish push', onclick = 'hide_content_text_div()')
+					t.button('Save', cls = 'buttonish', onclick = 'set_composition_content(true)')
+				t.hr()
+				t.input_(type = 'file', id = 'file_input', multiple = 'true', hidden = 'true')
+				t.div(id = 'composition_rich_content')
+
 	# Render the content:
 	if composition_content:
 		with result:
@@ -447,9 +489,14 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 				with t.div(id = div_id, onclick = onclick, cls = cls):
 					for content in phrase.content:
 						txt = str(content['content'])
-						if not txt.startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
-							if txt.endswith('.jpg'):
-								t.div(t.img(src = origin + f'/static/images/{txt}', width = 300))
+						if rich_text: # txt.startswith('{'):
+							# Just give the teaser text; don't show the (probably huge) noteset'
+							start = '{"ops":[{"insert":"'
+							end = min(len(start) + 30, min(txt.find('"},'), txt.find('\\n'))) # 30 chars or the first formatted bit or the first newline... whatever comes first
+							t.div(txt[len(start):end] + '...')
+						elif not txt.startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
+							if txt.endswith('.jpg') or txt.endswith('.mp4'):
+								t.div(t.img(src = origin + f'/static/images/{txt}{k_thumb_suffix}', width = 300))
 							else:
 								t.div(txt)
 			t.hr()

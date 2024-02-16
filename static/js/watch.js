@@ -132,7 +132,9 @@ function show_video(video, repeat) {
 	vid.load();
 	vid.classList.remove('hide');
 	vid.classList.add('show');
-	vid.play();
+
+	$('the_video').play();
+	//vid.play();
 }
 
 function play_video() {

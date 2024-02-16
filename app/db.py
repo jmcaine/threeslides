@@ -72,17 +72,18 @@ async def get_arrangements_by_tag_name(dbc, tag_name):
 async def _get_phrases(dbc, composition_id):
 	return [await _get_phrase(dbc, phrase) for phrase in await fetchall(dbc, ('select * from phrase where composition = ? order by seq', (composition_id,)))]
 
-_s_arrangement_basic = 'select arrangement.id as arrangement_id, arrangement.background as background, title.title as title, composition.id as composition_id, composition_title_table.title as composition_title'
+_s_arrangement_basic = 'select arrangement.id as arrangement_id, arrangement.background as background, title.title as title, composition.id as composition_id, composition_title_table.title as composition_title, composition.content_type as content_type'
 _js_arrangement_composition_titles = [_j_arrangement_title, _j_composition, _j_composition_title_2]
 async def get_arrangement_content(dbc, arrangement_id):
-	arrangement = await fetchone(dbc, (f'{_s_arrangement_basic} from arrangement join {" join ".join(_js_arrangement_composition_titles)} where arrangement.id = ?', (arrangement_id,)))
+	r = await fetchone(dbc, (f'{_s_arrangement_basic} from arrangement join {" join ".join(_js_arrangement_composition_titles)} where arrangement.id = ?', (arrangement_id,)))
 	return U.Struct(
 		arrangement_id = arrangement_id,
-		composition_id = arrangement['composition_id'],
-		title = _synthesize_title(arrangement),
-		background = arrangement['background'],
-		phrases = await _get_phrases(dbc, arrangement['composition_id']), # may be empty list []!
-		children = [await get_composition_content(dbc, child['composition'], child['id']) for child in await fetchall(dbc, ('select id, composition from arrangement_composition where arrangement = ? order by seq', (arrangement['arrangement_id'],)))],
+		composition_id = r['composition_id'],
+		content_type = r['content_type'],
+		title = _synthesize_title(r),
+		background = r['background'],
+		phrases = await _get_phrases(dbc, r['composition_id']), # may be empty list []!
+		children = [await get_composition_content(dbc, child['composition'], child['id']) for child in await fetchall(dbc, ('select id, composition from arrangement_composition where arrangement = ? order by seq', (r['arrangement_id'],)))],
 	)
 
 async def get_production_arrangement_content(dbc, production_arrangement_id):
@@ -90,10 +91,11 @@ async def get_production_arrangement_content(dbc, production_arrangement_id):
 	return await get_arrangement_content(dbc, (await fetchone(dbc, ('select arrangement from production_arrangements where id = ?', (production_arrangement_id,))))['arrangement'])
 
 async def get_composition_content(dbc, composition_id, arrangement_composition_id = None):
-	c = await fetchone(dbc, ('select composition.global, title.title from composition join title on title.id = composition.title where composition.id = ?', (composition_id,)))
+	c = await fetchone(dbc, ('select composition.global, composition.content_type, title.title from composition join title on title.id = composition.title where composition.id = ?', (composition_id,)))
 	return U.Struct(
 		arrangement_composition_id = arrangement_composition_id,
 		composition_id = composition_id,
+		content_type = c['content_type'],
 		title = c['title'],
 		globl = c['global'],
 		phrases = await _get_phrases(dbc, composition_id), # may be empty list []!
@@ -221,10 +223,10 @@ async def _insert_X_before(dbc, table, pkid, match_field):
 		new_seq = r['seq'] / 2
 	return r, new_seq
 
-async def insert_arrangement_before(dbc, production_arrangement_id, new_arrangement_id, typ):
+async def insert_arrangement_before(dbc, production_arrangement_id, new_arrangement_id, typ, content_type = None):
 	if typ == 'composition':
 		# First, fabricate the new arrangement (`new_arrangement_id` is actually a composition id in this case!):
-		r = await dbc.execute('insert into arrangement (title, composition) values (?, ?)', (812, new_arrangement_id)) # TODO: 1) replace '812' hardcode! 2) add background!?
+		r = await dbc.execute('insert into arrangement (title, composition, content_type) values (?, ?, ?)', (812, new_arrangement_id, content_type)) # TODO: 1) replace '812' hardcode! 2) add background!?
 		new_arrangement_id = r.lastrowid
 		# Add a final "blank" as the last TODO: KLUDGY!?
 		await dbc.execute('insert into arrangement_composition(arrangement, composition, seq) values (?, ?, 1000)', (new_arrangement_id, 2833)) # TODO replace 2833 hardcode! AND 100 hardcode!
@@ -243,17 +245,18 @@ async def insert_composition_before(dbc, arrangement_composition_id, new_composi
 async def insert_new_composition_before(dbc, composition_id, arrangement_composition_id):
 	r = await dbc.execute('insert into title (title) values (?)', ('NEW!',)) # editable later...
 	title_id = r.lastrowid
-	r = await dbc.execute('insert into composition (title, parent, seq) values (?, ?, ?)', (title_id, composition_id, 100)) # TODO: '100' is bogus; should discover what last is, and +1
+	ct = (await fetchone(dbc, ('select content_type from composition where id = ?', (composition_id,))))['content_type']
+	r = await dbc.execute('insert into composition (title, parent, seq, content_type) values (?, ?, ?, ?)', (title_id, composition_id, 100, ct)) # TODO: '100' is bogus; should discover what last is, and +1
 	return await insert_composition_before(dbc, arrangement_composition_id, r.lastrowid)
 
-async def insert_new_composition_arrangement_before(dbc, production_arrangement_id, new_composition_name):
+async def insert_new_composition_arrangement_before(dbc, production_arrangement_id, new_composition_name, content_type = None):
 	# this is for a new SONG, or "titled" (top-level) composition; many references to "composition" are to building-block compositions
 	r = await dbc.execute('insert into title (title) values (?)', (new_composition_name,))
 	title_id = r.lastrowid
-	r = await dbc.execute('insert into composition (title) values (?)', (title_id,))
+	r = await dbc.execute('insert into composition (title, content_type) values (?, ?)', (title_id, ct))
 	composition_id = r.lastrowid
 	r = await dbc.execute('insert into composition_tag (composition, tag) values (?, ?)', (composition_id, 2)) # TODO: '2' is a hardcode record ID for "song" - fix/generalize!
-	return await insert_arrangement_before(dbc, production_arrangement_id, composition_id, 'composition')
+	return await insert_arrangement_before(dbc, production_arrangement_id, composition_id, 'composition', content_type)
 
 
 async def remove_composition_from_arrangement(dbc, arrangement_composition_id):
@@ -323,13 +326,13 @@ async def set_composition_content(dbc, arrangement_composition_id, title, phrase
 	return ac['arrangement']
 
 async def get_flat_composition_content(dbc, composition_id):
+	r = await fetchone(dbc, ('select title.title, composition.content_type from title join composition on title.id = composition.title where composition.id = ?', (composition_id,)))
 	return U.Struct(
-		title = (await fetchone(dbc, ('select title.title from title join composition on title.id = composition.title where composition.id = ?', (composition_id,))))['title'],
+		title = r['title'],
+		content_type = r['content_type'],
 		phrases = await _get_phrases(dbc, composition_id),
 	)
 
-async def _get_x_phrase():
-	pass
 
 _get_x_phrase = lambda comparator, desc_asc: f'select * from phrase join composition on composition.id = phrase.composition join arrangement_composition on arrangement_composition.composition = composition.id where arrangement_composition.id = ? and phrase.seq {comparator} (select seq from phrase where id = ?) order by seq {desc_asc} limit 1'
 
@@ -340,3 +343,4 @@ async def get_next_phrase(dbc, ac_id, phrase_id):
 async def get_previous_phrase(dbc, ac_id, phrase_id):
 	result = await fetchone(dbc, (_get_x_phrase('<', 'desc'), (ac_id, phrase_id)))
 	return result['id'] if result else None
+

@@ -6,6 +6,7 @@ __license__ = 'MIT'
 import aiosqlite
 import asyncio
 import functools
+import io
 import json
 import logging
 import re
@@ -15,6 +16,8 @@ import traceback
 import datetime as dt
 
 from sqlite3 import PARSE_DECLTYPES
+
+from PIL import Image
 
 from uuid import uuid4
 from cryptography import fernet
@@ -74,8 +77,8 @@ def hr(text): return web.Response(text = text, content_type = 'text/html')
 # TEMP, DEBUG!!!!  (for running with:
 #   python -m aiohttp.web -H 0.0.0.0 -P 8080 app.main:init
 # "raw", and to get /static
-#if settings.debug:
-#	rt.static('/static', '/home/jmcaine/dev/ohs/ohs-test/static')
+if settings.debug:
+	rt.static('/static', '/home/jmcaine/dev/projects/threeslides/static')
 
 
 def auth(roles):
@@ -183,6 +186,15 @@ async def logout(rq):
 
 # TODO: more user/login functions here from ohs!!!
 
+
+@rt.get('/testquill')
+async def testquill(rq):
+	# This is the current favorite
+	return hr(html.testquill(_origin(rq), _ws_url(rq)))
+@rt.get('/testpell')
+async def testpell(rq):
+	# Not as good as Quill
+	return hr(html.testpell(_origin(rq), _ws_url(rq)))
 
 
 @rt.get('/select_song')
@@ -382,6 +394,8 @@ async def ws(rq):
 			elif msg.type == WSMsgType.TEXT:
 				hd.payload = json.loads(msg.data) # Note: payload validated in real msg_handlers, later
 				await handlers[hd.payload['task']](hd)
+			elif msg.type == WSMsgType.BINARY:
+				await _ws_binary(hd, msg.data)
 
 	except Exception as e:
 		l.error(traceback.format_exc())
@@ -398,7 +412,6 @@ async def ws(rq):
 
 
 
-
 # Utils ----------------------------------------
 
 _gurl = lambda rq, name, parts = {}: str(rq.app.router[name].url_for(**parts))
@@ -406,7 +419,7 @@ _gurl = lambda rq, name, parts = {}: str(rq.app.router[name].url_for(**parts))
 def _origin(rq):
 	result = rq.url
 	if settings.debug:
-		result = URL.build(scheme = result.scheme, host = result.host, port = 8001) # a bit of a kludge - comes from using adev, normally, for debugging, which serves static on a different port
+		result = URL.build(scheme = result.scheme, host = result.host, port = 8080) # a bit of a kludge - comes from using adev, normally, for debugging, which serves static on a different port
 	return str(result.origin())
 
 
@@ -574,6 +587,23 @@ async def _handle_announcements_arrangement(hd, arrangement_id):
 		await asyncio.gather(*[ws.send_json({'task': 'stop_announcements'}) for ws in hd.lpi.watchers.keys()])
 		return False #TODO: kludgy!
 
+async def _ws_binary(hd, data):
+	assert(data[0] == ord('!')) # "magic byte" ! to indicate this is a file upload (by convention)
+	idx = data.find(b'\r\n\r\n')
+	meta = json.loads(data[1:idx])
+	fn = meta['name']
+	path = 'static/uploads'
+	fp = f'{path}/{fn}'
+	with open(fp, "wb") as file:
+		file.write(data[idx+4:])
+	img = Image.open(io.BytesIO(data[idx+4:]))
+	img.thumbnail((200, 200))
+	small_fp = f'{path}/{fn}.small.jpg'
+	img.save(small_fp)
+	await hd.ws.send_json({'task': 'file_uploaded', 'name': fn, 'url': f'/{fp}', 'thumb_url': f'/{small_fp}'})
+
+
+
 async def _ws_edit(hd):
 	#TODO: SEE TODO items in _ws_drive!
 	__send_arrangement_content = lambda a_id, ac_id: _send_arrangement_content(hd, a_id, None, html._content_title_with_edits, True, ac_id)
@@ -622,7 +652,7 @@ async def _ws_edit(hd):
 				for contents in phrase.content:
 					text += contents['content'] + '\n'
 				text += '\n'
-			await hd.ws.send_json({'task': 'fetch_composition_content', 'title': result.title, 'text': text})
+			await hd.ws.send_json({'task': 'fetch_composition_content', 'title': result.title, 'text': text, 'content_type': result.content_type})
 
 		case 'insert_arrangement_before':
 			production_id, new_pa_id = await db.insert_arrangement_before(hd.dbc, hd.payload['production_arrangement_id'], hd.payload['new_arrangement_id'], hd.payload['typ'])
@@ -640,9 +670,12 @@ async def _ws_edit(hd):
 		case 'move_arrangement_up':
 			await _move_arrangement_up_down(hd, -1)
 
+
+
 async def _set_composition_content(hd, acid):
 	text = hd.payload['text']
 
+	# TODO!!! HERE -- this is where we can detect json and save as a singleton phrase, rather than breaking into phrases
 	phrases = []
 	content_lines = []
 	for line in text.strip().splitlines():
