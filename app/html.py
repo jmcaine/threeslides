@@ -161,8 +161,10 @@ def watch(origin, ws_url, data, show_hidden, cut_frame):
 		halfh_frame_frame_cls = 'halfh_frame_frame'
 	with d:
 		with t.body():
-			with t.div(id = 'video_frame', cls = 'full_frame'): # frames below are transparent-backgrounded, so they could display on top of this (if wanted).  Also, <body>'s style takes the backgroundImage; so that's "behind" this movie div
-				t.video(id = 'the_video', cls = 'hide', width = '100%')
+			# BG frames - frames below are transparent-backgrounded, so they could display on top of this.
+			t.div(id = 'bg_front_frame', cls = 'full_frame bg_frame')
+			t.div(id = 'bg_back_frame', cls = 'full_frame bg_frame')
+			t.video(id = 'the_video', cls = 'hide', width = '100%')
 			with t.div(cls = 'full_frame'):
 				t.div(id = 'main_front_frame', cls = 'vcenter_content')
 				t.div(id = 'main_back_frame', cls = 'vcenter_content')
@@ -282,7 +284,7 @@ def add_scripts(origin, scripts):
 		t.script(src = origin + f'/static/js/{script}')
 
 
-k_cache_version = '?4'
+k_cache_version = '?v=6'
 def _doc(title, origin, css = None):
 	d = document(title = title)
 	with d.head:
@@ -495,7 +497,7 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 							end = min(len(start) + 30, min(txt.find('"},'), txt.find('\\n'))) # 30 chars or the first formatted bit or the first newline... whatever comes first
 							t.div(txt[len(start):end] + '...')
 						elif not txt.startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
-							if txt.endswith('.jpg') or txt.endswith('.mp4'):
+							if txt.lower().endswith('.jpg') or txt.lower().endswith('.mp4'):
 								t.div(t.img(src = origin + f'/static/images/{txt}{k_thumb_suffix}', width = 300))
 							else:
 								t.div(txt)

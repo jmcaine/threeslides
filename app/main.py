@@ -67,7 +67,12 @@ l = logging.getLogger(__name__)
 # Can't store coroutines in sessions, directly; not even redis or memcached directories, so we store them in global memory, in this dict:
 g_twixt_work = {} # TODO: note, we 'del g_twixt_work[twixt_id]' and 'del session['twixt_id']' "as we go", but there's a real possibility of abandonment (as in, a page fails to fully load or to create the ws in its javascript, so the first ws_messages call never issues) -- so we should make a watchdog that cleans this out occasionally; thus, we'd need timestamps on the items within, as well
 
-g_announcement_id = 1;
+g_announcement_id = 1
+
+#NOTE: we used to use hd.session['current_ac_id'] and ...'current_phrase'..., but we need all drivers to be on the same page; we actually need another concept, of a "current show" or something, to which all drivers are connected, so that a server can run more than one show simultaneously if wanted (maybe we need this?  It would be more of a centralized-server model, rather than a server-at-the-prjector-itself model....)
+g_current_ac_id = 0
+g_current_phrase_id = 0
+
 
 # Utils -----------------------------------------------------------------------
 
@@ -471,17 +476,24 @@ async def _send_arrangement_content(hd, arrangement_id, click_script, content_ti
 	return content
 
 async def _set_new_live_phrase(hd, ac_id, phrase_id, exclude_self = True):
-	hd.session['current_ac_id'] = ac_id # for next time 'round
-	hd.session['current_phrase_id'] = phrase_id # for next time 'round
+	global g_current_ac_id # see the NOTE on g_current_ac_id declaration!
+	global g_current_phrase_id # see the NOTE on g_current_phrase_id declaration!
+	g_current_ac_id = ac_id # for next time 'round
+	g_current_phrase_id = phrase_id # for next time 'round
+	#NOTE: the following is how we used to do it, see NOTEs on g_current_ac_id and g_current_phrase_id declarations
+	#hd.session['current_ac_id'] = ac_id # see the NOTE on g_current_ac_id declaration!
+	#hd.session['current_phrase_id'] = phrase_id # see the NOTE on g_current_phrase_id declaration!
 	phrase = await db.get_phrase(hd.dbc, phrase_id)
 	await _send_phrase_to_watchers(hd, phrase)
 	await _send_new_live_phrase_id_to_other_drivers(hd, html.phrase_div_id(ac_id, phrase_id), exclude_self)
 
 async def _set_x_phrase(func, hd):
-	ac_id = hd.session.get('current_ac_id')
-	phrase_id = await func(hd.dbc, ac_id, hd.session.get('current_phrase_id'))
+	global g_current_ac_id
+	global g_current_phrase_id
+
+	phrase_id = await func(hd.dbc, g_current_ac_id, g_current_phrase_id)
 	if phrase_id:
-		await _set_new_live_phrase(hd, ac_id, phrase_id, False)
+		await _set_new_live_phrase(hd, g_current_ac_id, phrase_id, False)
 	# else, do NOTHING! (probably at the end of the line - last phrase in the composition)
 
 async def _ws_drive(hd):
@@ -531,7 +543,7 @@ async def _ws_drive(hd):
 async def _send_phrase_to_watchers(hd, phrase):
 	origin = _origin(hd.rq)
 	txt = str(phrase.content[0]['content']) if phrase.content and len(phrase.content) >= 1 else ''
-	if txt.endswith('.jpg'): # TODO: KLUDGY
+	if txt.lower().endswith('.jpg'): # TODO: KLUDGY
 		image = origin + f"/static/images/{txt}"
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': image}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
@@ -571,10 +583,10 @@ async def _send_new_bg_to_watchers(hd, background):
 	if background: # no-op, otherwise
 		origin = _origin(hd.rq)
 		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
-		if background.endswith('.jpg'):
+		if background.lower().endswith('.jpg'):
 			bg = origin + f'/static/bgs/{background}'
 			await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': bg}) for ws in hd.lpi.watchers.keys()])
-		elif background.endswith('.mp4'):
+		elif background.lower().endswith('.mp4'):
 			bg = origin + f'/static/bgs/videos/{background}'
 			await asyncio.gather(*[ws.send_json({'task': 'video', 'video': bg, 'repeat': 1}) for ws in hd.lpi.watchers.keys()])
 

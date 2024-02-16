@@ -1,29 +1,27 @@
-html,
-body,
-.bg {
+html, body, .full_frame, .bg_frame {
 	height: 100%;
 	width: 100%;
+}
+
+html, body {
 	margin: 0;
 	padding: 0;
 	overflow: hidden;   /* hide scrollbars */
 	cursor: none;
+	background-color: black;
 }
 
-body {
+.bg_frame {
 	background-size: auto 100%;
 	background-repeat: no-repeat;
 	background-position: center center;
-	opacity: 1.0;
-	transition: background 1.0s linear;
+	/*transition: background-image 1.0s linear;*/
 }
 
-/*.bg img { THIS way is more complicated and we never got it working, but, apparently, it would be the more "right" way; Chrome, at least, works with the body:background scheme, above, even including odd-aspect-ratio images; chromium does NOT!
-	z-index: 0;
-	height: 100%;
-	margin: auto;
+#the_video {
 	position: absolute;
-	transition: src 1.0s linear;
-}*/
+	width: 100%;
+}
 
 .full_frame {
 	position: absolute;
@@ -68,8 +66,18 @@ body {
 
 .vcenter {
 	position: relative;
-	top: 50%;
-	transform: translateY(-50%);
+	text-align: center;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 100%;
+}
+#bottom_frame .vcenter {
+		position:absolute;
+		top: 0;
+}
+#top_frame .vcenter {
+		position:absolute;
+		bottom: 0;
 }
 
 .halfback {

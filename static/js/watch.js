@@ -16,6 +16,8 @@ var g_current_frame = null;
 var g_next_frame = null;
 var g_later_frame = null;
 
+var g_current_bg = null;
+var g_next_bg = null;
 
 ws.onmessage = function(event) {
 	var payload = JSON.parse(event.data);
@@ -90,6 +92,7 @@ function init() {
 	ws_send({task: "init", lpi_id: g_lpi_id}); // lpi_id was set at top of scripts, upon crafting initial page, and now needs to be sent ('back') to ws handler
 	ws_send({task: "add_watcher"});
 	clear();
+	init_bg();
 }
 
 function clear() {
@@ -109,19 +112,40 @@ function clear() {
 	g_fading_frame.innerHTML = '';
 }
 
+function init_bg() {
+	g_current_bg = $('bg_back_frame');
+	g_next_bg = $('bg_front_frame');
+	g_current_bg.style.opacity = 0;
+	g_next_bg.style.opacity = 0;
+}
+
 function reset() {
-	clear()
+	clear();
+	init_bg();
 	remove_video();
+}
+
+function _flip_bg() {
+	g_next_bg.style.transition = 'opacity 1s ease';
+	g_next_bg.style.opacity = 1;
+	g_current_bg.style.transition = 'opacity 1s ease';
+	g_current_bg.style.opacity = 0;
+	f = g_current_bg;
+	g_current_bg = g_next_bg;
+	g_next_bg = f;
 }
 
 function set_background(bg) {
-	//$(bg).src = bg;
 	remove_video();
-	document.body.style.backgroundImage = "url('" + bg + "')";
+	g_next_bg.style.backgroundImage = "url('" + bg + "')";
+	_flip_bg();
 }
 
 function show_video(video, repeat) {
-	//$(bg).src = bg;
+	// remove bg image:
+	g_next_bg.style.backgroundImage = "none";
+	_flip_bg();
+	// add the video:
 	vid = $('the_video')
 	if (repeat) {
 		vid.setAttribute('loop', '');
@@ -172,7 +196,8 @@ function stop_announcements() {
 	}
 }
 function next_announcement(url) {
-	document.body.style.backgroundImage = "url('" + url + "')";
+	//document.body.style.backgroundImage = "url('" + url + "')";
+	set_background(url);
 }
 
 function _fade() {

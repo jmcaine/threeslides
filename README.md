@@ -6,7 +6,7 @@ Distributed / multi-host slide presentation system
 	$ python3 -m venv ve
 	$ . ve/bin/activate
 	$ pip install --upgrade pip
-	$ git clone https://github.com/jmcaine/threeslides.git
+	$ git clone git@github.com:jmcaine/threeslides.git
 	
 Install Requirements.  Note that what's really needed is are: aiohttp aiohttp-session aiosqlite cryptography dominate  
 (And, if adev is wanted, aiohttp-devtools -- see below, also)
