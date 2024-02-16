@@ -284,8 +284,7 @@ function file_uploaded(name, url, thumb_url) {
 	var range = g_quill_editor.getSelection();
 	if (range) {
 		g_quill_editor.insertEmbed(range.index, 'image', thumb_url);
-	}
-	console.log("Error - somehow file_uploaded() was called when the cursor was not in the editor, so we don't know where to put the thumbnail image!");
+	} else { console.log("Error - somehow file_uploaded() was called when the cursor was not in the editor, so we don't know where to put the thumbnail image!"); }
 }
 
 
