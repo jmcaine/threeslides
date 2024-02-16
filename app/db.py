@@ -253,7 +253,7 @@ async def insert_new_composition_arrangement_before(dbc, production_arrangement_
 	# this is for a new SONG, or "titled" (top-level) composition; many references to "composition" are to building-block compositions
 	r = await dbc.execute('insert into title (title) values (?)', (new_composition_name,))
 	title_id = r.lastrowid
-	r = await dbc.execute('insert into composition (title, content_type) values (?, ?)', (title_id, ct))
+	r = await dbc.execute('insert into composition (title, content_type) values (?, ?)', (title_id, content_type))
 	composition_id = r.lastrowid
 	r = await dbc.execute('insert into composition_tag (composition, tag) values (?, ?)', (composition_id, 2)) # TODO: '2' is a hardcode record ID for "song" - fix/generalize!
 	return await insert_arrangement_before(dbc, production_arrangement_id, composition_id, 'composition', content_type)
