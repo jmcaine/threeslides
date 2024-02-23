@@ -461,9 +461,11 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 					fr = 'edit_content_title'
 					t.label('Title: ', fr = fr)
 					t.input_(type = 'text', id = fr, name = fr, placeholder = 'Type title here')
+					t.button('Upload...', cls = 'buttonish', onclick = 'file_input_2.click()' )
 					t.button('Cancel', cls = 'buttonish push', onclick = 'hide_content_text_div()')
 					t.button('Save', cls = 'buttonish', onclick = 'set_composition_content(false)')
 				t.hr()
+				t.input_(type = 'file', id = 'file_input_2', multiple = 'true', hidden = 'true')
 				t.textarea(id = 'composition_plain_content', cls = 'full_width_height', placeholder = 'Type content here...')
 			# BEGIN: !!!DUPLICATED code, from above, but "new style" content editor:
 			with t.div(id = 'content_rich_text_div', cls = 'biggest_focus_box hide'):
@@ -498,7 +500,8 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 							t.div(txt[len(start):end] + '...')
 						elif not txt.startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
 							if txt.lower().endswith('.jpg') or txt.lower().endswith('.mp4'):
-								t.div(t.img(src = origin + f'/static/images/{txt}{k_thumb_suffix}', width = 300))
+								#t.div(t.img(src = origin + f'/static/images/{txt}{k_thumb_suffix}', width = 300))
+								t.div(t.img(src = origin + f'{txt}{k_thumb_suffix}', width = 300))
 							else:
 								t.div(txt)
 			t.hr()

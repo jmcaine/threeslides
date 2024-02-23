@@ -29,7 +29,7 @@ function ws_send(message, raw = null) {
 	}
 };
 
-function ws_send_file(file) {
+function ws_send_file(file, reply_type) {
 	const reader = new FileReader();
 	reader.onabort     = function(e) { /* @TODO */ }
 	reader.onerror     = function(e) { /* @TODO */ }
@@ -39,7 +39,7 @@ function ws_send_file(file) {
 	{
 		let rawData = new ArrayBuffer();
 		rawData = e.target.result;
-		ws_send({task: "edit", action: "upload_file", name: file.name, size: file.size}, rawData);
+		ws_send({task: "edit", action: "upload_file", name: file.name, size: file.size, reply_type: reply_type}, rawData);
 		//ws_send({task: "edit", action: "upload_file", name: file.name, size: file.size}, e.target.result);
 	}
 	reader.readAsArrayBuffer(file); // _must_ use ArrayBuffer to match rawData type, above

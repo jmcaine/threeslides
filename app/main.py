@@ -604,6 +604,7 @@ async def _ws_binary(hd, data):
 	idx = data.find(b'\r\n\r\n')
 	meta = json.loads(data[1:idx])
 	fn = meta['name']
+	reply_type = meta['reply_type']
 	path = 'static/uploads'
 	fp = f'{path}/{fn}'
 	with open(fp, "wb") as file:
@@ -612,7 +613,7 @@ async def _ws_binary(hd, data):
 	img.thumbnail((200, 200))
 	small_fp = f'{path}/{fn}.small.jpg'
 	img.save(small_fp)
-	await hd.ws.send_json({'task': 'file_uploaded', 'name': fn, 'url': f'/{fp}', 'thumb_url': f'/{small_fp}'})
+	await hd.ws.send_json({'task': 'file_uploaded', 'name': fn, 'reply_type': reply_type, 'url': f'/{fp}', 'thumb_url': f'/{small_fp}'})
 
 
 

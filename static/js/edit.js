@@ -26,7 +26,7 @@ ws.onmessage = function(event) {
 			fetch_composition_content(payload.text, payload.title, payload.content_type);
 			break;
 		case "file_uploaded":
-			file_uploaded(payload.name, payload.url, payload.thumb_url);
+			file_uploaded(payload.name, payload.url, payload.thumb_url, payload.reply_type);
 			break;
 		case "load_delta_content":
 			load_delta_content(payload.content);
@@ -46,7 +46,15 @@ const g_file_input = $('file_input');
 g_file_input.onchange = () => {
 	var raw = new ArrayBuffer();
 	for (const file of g_file_input.files) {
-		ws_send_file(file);
+		ws_send_file(file, 'thumbnail');
+	}
+}
+
+const g_file_input_2 = $('file_input_2');
+g_file_input_2.onchange = () => {
+	var raw = new ArrayBuffer();
+	for (const file of g_file_input_2.files) {
+		ws_send_file(file, 'textual');
 	}
 }
 
@@ -67,7 +75,7 @@ function reset_quill() {
 				//[	{'color': 'black'}, {'color': 'red'} ],
 				[	{'color': ['black', '#c40007', '#aa5500', '#00aa00', '#017878', '#001999', '#59038f',
 									'white', '#ffadb0', '#ffcd9c', '#9eff9e', '#9ffcfc', '#a6b4ff', '#d89ffc',]},
-					{'background': ['white', '#ffadb0', '#ffcd9c', '#9eff9e', '#9ffcfc', '#a6b4ff', '#d89ffc',
+					{'background': ['white', 'yellow', '#ffcd9c', '#9eff9e', '#9ffcfc', '#a6b4ff', '#d89ffc',
 											'black', '#c40007', '#aa5500', '#00aa00', '#017878', '#001999', '#59038f',]}],
 				[{ 'font': [] }],
 				[{ 'size': ['small', false, 'large', 'huge'] }],
@@ -93,7 +101,7 @@ function reset_quill() {
 	});
 	g_quill_toolbar.addHandler('direction', function() {
 		var range = g_quill_editor.getSelection();
-		this.quill.insertText(range.index, '\n---\n');
+		this.quill.insertText(range.index, '\n------------------------\n');
 	});
 
 }
@@ -280,13 +288,31 @@ function remove_arrangement(production_arrangement_id) {
 	ws_send({task: "edit", action: "remove_arrangement", production_arrangement_id: production_arrangement_id})
 }
 
-function file_uploaded(name, url, thumb_url) {
-	var range = g_quill_editor.getSelection();
-	if (range) {
-		g_quill_editor.insertEmbed(range.index, 'image', thumb_url);
-	} else { console.log("Error - somehow file_uploaded() was called when the cursor was not in the editor, so we don't know where to put the thumbnail image!"); }
+function file_uploaded(name, url, thumb_url, reply_type) {
+	if (reply_type == 'thumbnail') {
+		var range = g_quill_editor.getSelection();
+		if (range) {
+			g_quill_editor.insertEmbed(range.index, 'image', thumb_url);
+		} else { console.log("Error - somehow file_uploaded() was called when the cursor was not in the editor, so we don't know where to put the thumbnail image!"); }
+	} else {
+		insert_text($('composition_plain_content'), url);
+	}
 }
 
+function insert_text(textarea, text) {
+	// Get the current cursor position
+	const position = textarea.selectionStart;
+
+	// Get the text before and after the cursor position
+	const before = textarea.value.substring(0, position);
+	const after = textarea.value.substring(position, textarea.value.length);
+
+	// Insert the new text at the cursor position
+	textarea.value = before + text + after;
+
+	// Set the cursor position to after the newly inserted text
+	textarea.selectionStart = textarea.selectionEnd = position + text.length;
+};
 
 function _show_dialog(div) {
 	div.classList.remove("hide");
