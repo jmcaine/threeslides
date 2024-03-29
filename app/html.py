@@ -160,7 +160,7 @@ def watch(origin, ws_url, data, show_hidden, cut_frame):
 	if show_hidden or cut_frame:
 		halfh_frame_frame_cls = 'halfh_frame_frame'
 	with d:
-		with t.body():
+		with t.body(cls = 'white_bg' if show_hidden else 'black_bg'):
 			# BG frames - frames below are transparent-backgrounded, so they could display on top of this.
 			t.div(id = 'bg_front_frame', cls = 'full_frame bg_frame')
 			t.div(id = 'bg_back_frame', cls = 'full_frame bg_frame')

@@ -8,6 +8,12 @@ html, body {
 	padding: 0;
 	overflow: hidden;   /* hide scrollbars */
 	cursor: none;
+}
+
+.white_bg {
+	background-color: white;
+}
+.black_bg {
 	background-color: black;
 }
 
