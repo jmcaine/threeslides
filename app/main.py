@@ -601,19 +601,33 @@ async def _handle_announcements_arrangement(hd, arrangement_id):
 
 async def _ws_binary(hd, data):
 	assert(data[0] == ord('!')) # "magic byte" ! to indicate this is a file upload (by convention)
-	idx = data.find(b'\r\n\r\n')
-	meta = json.loads(data[1:idx])
-	fn = meta['name']
+	delimiter = b'\r\n\r\n'
+	idx = data.find(delimiter)
+	meta = json.loads(data[1:idx]) # '1' to get past the "magic byte" ('!')
+	meta['files'] = json.loads(meta['files'])
+	payload = data[idx+len(delimiter):]
+	assert(meta['action'] == 'upload_files')
 	reply_type = meta['reply_type']
-	path = 'static/uploads'
-	fp = f'{path}/{fn}'
-	with open(fp, "wb") as file:
-		file.write(data[idx+4:])
-	img = Image.open(io.BytesIO(data[idx+4:]))
-	img.thumbnail((200, 200))
-	small_fp = f'{path}/{fn}.small.jpg'
-	img.save(small_fp)
-	await hd.ws.send_json({'task': 'file_uploaded', 'name': fn, 'reply_type': reply_type, 'url': f'/{fp}', 'thumb_url': f'/{small_fp}'})
+	path = '/static/uploads'
+	pos = 0
+	names = []
+	fps = []
+	thumb_urls = []
+	for fil in meta['files']:
+		name = fil['name']
+		size = fil['size']
+		names.append(name)
+		fps.append(f'{path}/{name}')
+
+		with open(fps[-1][1:], "wb") as file: # [1:] b/c it's convenient to keep the leading '/' on the root 'path', as it's needed almost everywhere; but not here :)
+			file.write(payload[pos:pos+size])
+		thumb_urls.append(f'{path}/{name}.small.jpg')
+		img = Image.open(io.BytesIO(payload[pos:pos+size]))
+		img.thumbnail((200, 200)) # modifies img in-place
+		img.save(thumb_urls[-1][1:]) # [1:] b/c it's convenient to keep the leading '/' on the root 'path', as it's needed almost everywhere; but not here :)
+		pos += size
+
+	await hd.ws.send_json({'task': 'files_uploaded', 'reply_type': reply_type, 'names': names, 'urls': fps, 'thumb_urls': thumb_urls})
 
 
 

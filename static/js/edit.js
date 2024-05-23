@@ -1,6 +1,8 @@
 
+const QUILL_PAGE_BREAK = '\n------------------------\n';
+
 ws.onmessage = function(event) {
-	var payload = JSON.parse(event.data);
+	let payload = JSON.parse(event.data);
 	//console.log("payload.task = " + payload.task);
 	switch(payload.task) {
 		case "init":
@@ -25,8 +27,8 @@ ws.onmessage = function(event) {
 		case "fetch_composition_content":
 			fetch_composition_content(payload.text, payload.title, payload.content_type);
 			break;
-		case "file_uploaded":
-			file_uploaded(payload.name, payload.url, payload.thumb_url, payload.reply_type);
+		case "files_uploaded":
+			files_uploaded(payload.names, payload.urls, payload.thumb_urls, payload.reply_type);
 			break;
 		case "load_delta_content":
 			load_delta_content(payload.content);
@@ -41,21 +43,14 @@ ws.onmessage = function(event) {
 var g_insertion_acid = 0;
 var g_acid_under_edit = 0; // we'd really only need the composition_id, but the arrangement_composition_id incorporates the current arrangement, which is necessary to show the updated arrangement after the composition edit is finished.  Also, we could always have just fetched the composition_id, given the acid, with one more DB call; just chose to send both to this function here because we had both easily available, and infrastructure was already sent to fetch content given a composition_id.
 
-
 const g_file_input = $('file_input');
 g_file_input.onchange = () => {
-	var raw = new ArrayBuffer();
-	for (const file of g_file_input.files) {
-		ws_send_file(file, 'thumbnail');
-	}
+	ws_send_files(g_file_input.files, 'thumbnail'); // ws_send_files() defined in ws.js
 }
 
 const g_file_input_2 = $('file_input_2');
 g_file_input_2.onchange = () => {
-	var raw = new ArrayBuffer();
-	for (const file of g_file_input_2.files) {
-		ws_send_file(file, 'textual');
-	}
+	ws_send_files(g_file_input_2.files, 'textual'); // ws_send_files() defined in ws.js
 }
 
 var g_quill_editor = null;
@@ -65,7 +60,6 @@ var g_quill_toolbar = null;
 //-----------------------------
 
 function reset_quill() {
-
 	g_quill_editor = new Quill($('composition_rich_content'), {
 		//formats: ['bold', 'italic', 'underline', 'color', 'background', 'link', 'size', 'strike', 'script' ...], see https://quilljs.com/docs/formats/
 		//bounds: $('composition_rich_content'), // ???
@@ -100,10 +94,8 @@ function reset_quill() {
 		g_file_input.click();
 	});
 	g_quill_toolbar.addHandler('direction', function() {
-		var range = g_quill_editor.getSelection();
-		this.quill.insertText(range.index, '\n------------------------\n');
+		g_quill_editor.insertText(g_quill_editor.getSelection().index, QUILL_PAGE_BREAK);
 	});
-
 }
 
 
@@ -246,8 +238,8 @@ function insert_new_composition(composition_id) {
 }
 
 function set_composition_content(rich_text) {
-	var text; // old: $('composition_content_div').value
-	var title;
+	let text; // old: $('composition_content_div').value
+	let title;
 	if (rich_text) {
 		_hide_dialog($('content_rich_text_div'));// TODO: just show spinner, here, and and hide the dialog upon set_production_and_arrangement_content or set_arrangement_content callbacks?
 		text = JSON.stringify(g_quill_editor.getContents()); // g_quill_editor.getText(); only gets the plain text
@@ -288,14 +280,17 @@ function remove_arrangement(production_arrangement_id) {
 	ws_send({task: "edit", action: "remove_arrangement", production_arrangement_id: production_arrangement_id})
 }
 
-function file_uploaded(name, url, thumb_url, reply_type) {
-	if (reply_type == 'thumbnail') {
-		var range = g_quill_editor.getSelection();
-		if (range) {
-			g_quill_editor.insertEmbed(range.index, 'image', thumb_url);
-		} else { console.log("Error - somehow file_uploaded() was called when the cursor was not in the editor, so we don't know where to put the thumbnail image!"); }
-	} else {
-		insert_text($('composition_plain_content'), url);
+function files_uploaded(names, urls, thumb_urls, reply_type) {
+	for (i in names) {
+		if (reply_type == 'thumbnail') {
+			let range = g_quill_editor.getSelection();
+			if (range) {
+				g_quill_editor.insertText(range.index, QUILL_PAGE_BREAK);
+				g_quill_editor.insertEmbed(range.index, 'image', thumb_urls[i]);
+			} else { console.log("Error - somehow files_uploaded() was called when the cursor was not in the editor, so we don't know where to put the thumbnail image!"); }
+		} else {
+			insert_text($('composition_plain_content'), urls[i] + '\n\n');
+		}
 	}
 }
 
