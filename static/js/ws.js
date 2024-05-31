@@ -11,12 +11,12 @@ function ws_send(message) {
 }
 
 
-function ws_send_files(files, reply_type) {
+function ws_send_files(files, reply_type, acid) {
 	if (!ws || ws.readyState == WebSocket.CLOSING || ws.readyState == WebSocket.CLOSED) {
 		alert("Lost connection... going to reload page....");
 		location.reload();
 	} else {
-		let msg = {task: "edit", action: "upload_files", files: [], reply_type: reply_type};
+		let msg = {task: "edit", action: "upload_files", acid: acid, files: [], reply_type: reply_type};
 		let contents = {};
 		let total_bytelength = 0;
 		let finish_counter = 0;

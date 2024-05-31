@@ -109,6 +109,7 @@ async def _get_phrase(dbc, phrase):
 	return U.Struct(
 		phrase = phrase,
 		content = await fetchall(dbc, ('select * from content where phrase = ? order by seq', (phrase['id'],))),
+		content_type = (await fetchone(dbc, ('select content_type from composition where id = ?', (phrase['composition'],))))['content_type']
 	)
 
 async def get_phrase(dbc, phrase_id):
@@ -290,15 +291,16 @@ async def get_compositions_and_arrangements(dbc, strng):
 from os import listdir, getcwd
 from os.path import isfile, join
 async def get_background_images(dbc, strng):
-	return _get_background_x(dbc, strng, join(getcwd(), 'static', 'bgs'))
+	return _get_background_x(dbc, strng, 'jpg')
 
 async def get_background_videos(dbc, strng):
-	return _get_background_x(dbc, strng, join(getcwd(), 'static', 'bgs', 'videos'))
+	return _get_background_x(dbc, strng, 'mp4')
 
-def _get_background_x(dbc, strng, path):
+def _get_background_x(dbc, strng, extension):
+	path = join(getcwd(), 'static', 'uploads', 'bgs')
 	return [U.Struct(
 		filename = f,
-	) for f in listdir(path) if (isfile(join(path, f)) and f.endswith('.small.jpg'))]  # filtering on .jpg even for videos, as we want the thumbnails....
+	) for f in listdir(path) if (isfile(join(path, f)) and f.endswith(f'{extension}.small.jpg'))]  # filtering on .small.jpg even for videos, as we want the thumbnails....
 
 async def set_background_media(dbc, arrangement_id, filename):
 	r = await dbc.execute(f'update arrangement set background = ? where id = ?', (filename, arrangement_id))
@@ -333,7 +335,7 @@ async def get_flat_composition_content(dbc, composition_id):
 		phrases = await _get_phrases(dbc, composition_id),
 	)
 
-_get_x_phrase = lambda comparator, desc_asc: f'select * from phrase join composition on composition.id = phrase.composition join arrangement_composition on arrangement_composition.composition = composition.id where arrangement_composition.id = ? and phrase.seq {comparator} (select seq from phrase where id = ?) order by seq {desc_asc} limit 1'
+_get_x_phrase = lambda comparator, desc_asc: f'select phrase.id from phrase join composition on composition.id = phrase.composition join arrangement_composition on arrangement_composition.composition = composition.id where arrangement_composition.id = ? and phrase.seq {comparator} (select phrase.seq from phrase where phrase.id = ?) order by phrase.seq {desc_asc} limit 1'
 
 async def get_next_phrase(dbc, ac_id, phrase_id):
 	result = await fetchone(dbc, (_get_x_phrase('>', 'asc'), (ac_id, phrase_id)))

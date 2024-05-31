@@ -1,12 +1,31 @@
 
-const QUILL_PAGE_BREAK = '\n------------------------\n';
+var g_insertion_acid = 0;
+var g_acid_under_edit = 0; // we'd really only need the composition_id, but the arrangement_composition_id incorporates the current arrangement, which is necessary to show the updated arrangement after the composition edit is finished.  Also, we could always have just fetched the composition_id, given the acid, with one more DB call; just chose to send both to this function here because we had both easily available, and infrastructure was already sent to fetch content given a composition_id.
+
+const g_file_input = $('file_input');
+g_file_input.onchange = () => {
+	ws_send_files(g_file_input.files, 'thumbnail', g_acid_under_edit); // ws_send_files() defined in ws.js
+}
+
+const g_file_input_2 = $('file_input_2');
+g_file_input_2.onchange = () => {
+	ws_send_files(g_file_input_2.files, 'textual', g_acid_under_edit); // ws_send_files() defined in ws.js
+}
+
+var g_quill_editor = null;
+var g_quill_toolbar = null;
+init_quill();
+
+// CANNOT do this - var ws = new WebSocket(... does NOT always result in an onopen firing!  But it DOES always result in the ws open handler
+//ws.onopen = function(event) {
+//	ws_send({task: "init"});
+//}
 
 ws.onmessage = function(event) {
 	let payload = JSON.parse(event.data);
 	//console.log("payload.task = " + payload.task);
 	switch(payload.task) {
 		case "init":
-			reset_quill();
 			ws_send({task: "init"});
 			break;
 		case "set_arrangement_content":
@@ -28,7 +47,7 @@ ws.onmessage = function(event) {
 			fetch_composition_content(payload.text, payload.title, payload.content_type);
 			break;
 		case "files_uploaded":
-			files_uploaded(payload.names, payload.urls, payload.thumb_urls, payload.reply_type);
+			files_uploaded(payload.path, payload.names, payload.thumbs, payload.reply_type);
 			break;
 		case "load_delta_content":
 			load_delta_content(payload.content);
@@ -40,26 +59,9 @@ ws.onmessage = function(event) {
 }
 
 
-var g_insertion_acid = 0;
-var g_acid_under_edit = 0; // we'd really only need the composition_id, but the arrangement_composition_id incorporates the current arrangement, which is necessary to show the updated arrangement after the composition edit is finished.  Also, we could always have just fetched the composition_id, given the acid, with one more DB call; just chose to send both to this function here because we had both easily available, and infrastructure was already sent to fetch content given a composition_id.
-
-const g_file_input = $('file_input');
-g_file_input.onchange = () => {
-	ws_send_files(g_file_input.files, 'thumbnail'); // ws_send_files() defined in ws.js
-}
-
-const g_file_input_2 = $('file_input_2');
-g_file_input_2.onchange = () => {
-	ws_send_files(g_file_input_2.files, 'textual'); // ws_send_files() defined in ws.js
-}
-
-var g_quill_editor = null;
-var g_quill_toolbar = null;
-
-
 //-----------------------------
 
-function reset_quill() {
+function init_quill() {
 	g_quill_editor = new Quill($('composition_rich_content'), {
 		//formats: ['bold', 'italic', 'underline', 'color', 'background', 'link', 'size', 'strike', 'script' ...], see https://quilljs.com/docs/formats/
 		//bounds: $('composition_rich_content'), // ???
@@ -78,7 +80,7 @@ function reset_quill() {
 				//[{ 'header': [],}, ],
 				[{ 'list': 'ordered'}, { 'list': 'bullet' }, 'blockquote'],
 				['image',], // 'video' - just discern programatically
-				['direction',],
+				//['direction',],
 				//['clean'], // bad idea to avail this - accidental click wipes all formatting
 			],
 		},
@@ -93,15 +95,14 @@ function reset_quill() {
 	g_quill_toolbar.addHandler('image', function() {
 		g_file_input.click();
 	});
-	g_quill_toolbar.addHandler('direction', function() {
-		g_quill_editor.insertText(g_quill_editor.getSelection().index, QUILL_PAGE_BREAK);
-	});
+	//g_quill_toolbar.addHandler('direction', function() {
+	//	g_quill_editor.insertText(g_quill_editor.getSelection().index, QUILL_PAGE_BREAK);
+	//});
 }
 
 
 function set_arrangement_content_X(content) {
 	set_arrangement_content(content);
-	setTimeout(reset_quill, 200); // wait for the dom to finish updating, from above....
 }
 
 function load_arrangement(div_id, arrangement_id) {
@@ -148,10 +149,12 @@ function show_arrangement_choice_filter(before_production_arrangement_id) {
 }
 
 function hide_dialogs() {
-	_hide_dialog($('available_arrangements_div'));
-	_hide_dialog($('available_content_div'));
-	_hide_dialog($('arrangement_details_div'));
-	_hide_dialog($('content_text_div'));
+	_hide_only($('available_arrangements_div'));
+	_hide_only($('available_content_div'));
+	_hide_only($('arrangement_details_div'));
+	_hide_only($('content_text_div'));
+	$('gray_screen_div').classList.remove("show");
+	$('gray_screen_div').classList.add("hide");
 }
 function hide_available_content_div() {
 	_hide_dialog($('available_content_div'));
@@ -238,7 +241,7 @@ function insert_new_composition(composition_id) {
 }
 
 function set_composition_content(rich_text) {
-	let text; // old: $('composition_content_div').value
+	let text;
 	let title;
 	if (rich_text) {
 		_hide_dialog($('content_rich_text_div'));// TODO: just show spinner, here, and and hide the dialog upon set_production_and_arrangement_content or set_arrangement_content callbacks?
@@ -280,16 +283,17 @@ function remove_arrangement(production_arrangement_id) {
 	ws_send({task: "edit", action: "remove_arrangement", production_arrangement_id: production_arrangement_id})
 }
 
-function files_uploaded(names, urls, thumb_urls, reply_type) {
+function files_uploaded(path, names, thumbs, reply_type) {
 	for (i in names) {
 		if (reply_type == 'thumbnail') {
 			let range = g_quill_editor.getSelection();
 			if (range) {
-				g_quill_editor.insertText(range.index, QUILL_PAGE_BREAK);
-				g_quill_editor.insertEmbed(range.index, 'image', thumb_urls[i]);
+				g_quill_editor.insertText(range.index, '\n');
+				g_quill_editor.insertEmbed(range.index, 'image', '/' + path + thumbs[i]); // leading / needed for embed ref
+				g_quill_editor.insertText(range.index, '\n');
 			} else { console.log("Error - somehow files_uploaded() was called when the cursor was not in the editor, so we don't know where to put the thumbnail image!"); }
 		} else {
-			insert_text($('composition_plain_content'), urls[i] + '\n\n');
+			insert_text($('composition_plain_content'), names[i] + '\n\n');
 		}
 	}
 }
@@ -308,20 +312,6 @@ function insert_text(textarea, text) {
 	// Set the cursor position to after the newly inserted text
 	textarea.selectionStart = textarea.selectionEnd = position + text.length;
 };
-
-function _show_dialog(div) {
-	div.classList.remove("hide");
-	div.classList.add("show");
-	$('gray_screen_div').classList.remove("hide");
-	$('gray_screen_div').classList.add("show");
-}
-
-function _hide_dialog(div) {
-	div.classList.remove("show");
-	div.classList.add("hide");
-	$('gray_screen_div').classList.remove("show");
-	$('gray_screen_div').classList.add("hide");
-}
 
 function _color_text(ths, range, color) {
 	if (range.length == 0) {

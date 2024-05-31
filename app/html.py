@@ -75,24 +75,23 @@ def build_arrangement_filter_result_content(results, before_production_arrangeme
 	return d.render()
 
 def build_background_filter_result_content(origin, images, videos):
-	def add_thumbnails(lst, path):
+	def add_thumbnails(lst):
 		for i in lst:
 			fn = i.filename.removesuffix(k_thumb_suffix) # thumbnails
-			t.div(t.img(src = origin + f'/static/{path}/{i.filename}', width = 80), onclick = f'set_bg_media("{fn}")')
+			t.div(t.img(src = origin + f'/static/uploads/bgs/{i.filename}', width = 160), onclick = f'set_bg_media("{fn}")')
 
 	d = t.div(cls = 'thumbnails')
 	with d:
-		t.div('Images...')
-		add_thumbnails(images, 'bgs')
-		t.hr()
-		t.hr()
-		t.div('Videos:')
-		add_thumbnails(videos, 'bgs/videos')
+		t.h2('Images...', cls = 'full_row')
+		add_thumbnails(images)
+		t.h2('Videos...', cls = 'full_row')
+		add_thumbnails(videos)
 	return d.render()
 
 
 def div_phrase(config, phrase):
-	result = t.div(cls = 'halo_content vcenter') if not config['show_hidden'] else t.div(cls = 'preformatted_content vcenter') # show as monospace+preformatted if we're showing chords
+	font_div = 'content_large_font' if config['font_size'] == 'large' else 'content_small_font'
+	result = t.div(cls = f'halo_content vcenter {font_div}') if not config['show_hidden'] else t.div(cls = 'preformatted_content vcenter') # show as monospace+preformatted if we're showing chords
 	if phrase:
 		with result:
 			for content in phrase.content:
@@ -123,18 +122,26 @@ _js_ws = lambda ws_url: raw(f'var ws = new WebSocket("{ws_url}");')
 _js_lpi = lambda lpi_id: raw(f'var g_lpi_id = {lpi_id};')
 _js_show_hidden = lambda show_hidden: raw(f'var g_show_hidden = {"true" if show_hidden else "false"};')
 
+
 def drive(origin, ws_url, data):
-	d = _doc(text.doc_prefix + f'Drive {data.production["name"]}', origin, ('common.css', 'driver.css'))
+	d = _doc(text.doc_prefix + f'Drive {data.production["name"]}', origin, ('common.css', 'quill.2.0.2.snow.css', 'driver.css'))
+
 	with d:
+		t.div(cls = 'gray_screen hide', id = 'gray_screen_div', onclick = 'hide_dialogs()') # invisible at first; for "dialog box" divs, later..
 		with t.body():
 			with t.div(cls = 'header'):
 				t.div('CLEAR', cls = 'buttonish header_item', onclick = 'clear_watchers()')
-				t.div('EDIT SERVICE', cls = 'buttonish header_item', onclick = f"window.location.href='/edit_production_arrangements/{data.production['id']}'")
+				t.div('EDIT SERVICE', cls = 'buttonish header_item', onclick = f"location.replace('/edit_production_arrangements/{data.production['id']}');")
 				t.div('►', cls = 'buttonish header_item', onclick = 'play_video()')
 				t.div('◄◄', cls = 'buttonish header_item', onclick = 'reset_video()')
 				t.div('■', cls = 'buttonish header_item', onclick = 'pause_video()')
 				#t.div('UNDO', cls = 'buttonish header_item', onclick = '');
 				#NEVER!(require attention to each) t.div('NEXT', cls = 'buttonish header_item', onclick = ''); # TODO: use data.lpi_id
+
+
+			_add_rich_content_driver()
+
+
 			with t.div(cls = 'two-col'):
 				with t.div(cls = 'left-thin highlight_container', id = 'production_content'):
 					_build_left_arrangement_titles(data.arrangement_titles, 'drive_arrangement', False)
@@ -149,10 +156,35 @@ def drive(origin, ws_url, data):
 
 		t.script(_js_ws(ws_url))
 		t.script(_js_lpi(data.lpi_id))
-		add_scripts(origin, ('basic.js', 'ws.js', 'drive.js', 'common.js'))
+		add_scripts(origin, ('basic.js', 'ws.js', 'quill.2.0.2.js', 'dialog.js', 'drive.js', 'common.js'))
 
 	return d.render()
 
+
+def watch_captioned(origin, ws_url, data):
+	d = _doc(text.doc_prefix + f'Watch CAPTIONED {data.production["name"]}', origin, ('watcher.css',))
+	with d:
+		with t.body(cls = 'green_bg'):
+			# BG frames - frames below are transparent-backgrounded, so they could display on top of this.
+			t.div(id = 'bg_front_frame', cls = 'full_frame bg_frame')
+			t.div(id = 'bg_back_frame', cls = 'full_frame bg_frame')
+			t.video(id = 'the_video', cls = 'hide', width = '100%')
+			with t.div(cls = 'full_frame'):
+				t.div(id = 'main_front_frame', cls = 'vcenter_content')
+				t.div(id = 'main_back_frame', cls = 'vcenter_content')
+			with t.div(cls = 'halfh_frame_frame'):
+				with t.div(id = 'top_frame', cls = 'halfh_frame'):
+					t.div(id = 'top_front_frame', cls = 'vcenter_content')
+					t.div(id = 'top_back_frame', cls = 'vcenter_content')
+				with t.div(id = 'bottom_frame', cls = 'halfh_frame'):
+					t.div(id = 'bottom_front_frame', cls = 'vcenter_content')
+					t.div(id = 'bottom_back_frame', cls = 'vcenter_content')
+
+		t.script(_js_ws(ws_url))
+		t.script(_js_lpi(data.lpi_id))
+		add_scripts(origin, ('basic.js', 'ws.js', 'watch_captioned.js?bust=1'))
+
+	return d.render()
 
 def watch(origin, ws_url, data, show_hidden, cut_frame):
 	d = _doc(text.doc_prefix + f'Watch {data.production["name"]}', origin, ('watcher.css',))
@@ -192,7 +224,7 @@ def edit_production(form, title, origin, production = None, upcomings = None, te
 				with t.table():
 					for upcoming in upcomings:
 						dts = _format_date_time(upcoming['scheduled'], False)
-						with t.tr(cls = 'selectable_row', onclick = f"window.location.href='/edit_production_arrangements/{upcoming['id']}'"):
+						with t.tr(cls = 'selectable_row', onclick = f"location.assign('/edit_production_arrangements/{upcoming['id']}');"):
 							t.td(upcoming['name'], align = 'right')
 							t.td('-- ' + dts)
 			t.p(t.b('Or...'))
@@ -237,13 +269,14 @@ def testpell(origin, ws_url):
 	) for a in arrangements]
 '''
 def edit_production_arrangements(ws_url, form, origin, production, arrangement_titles, first_arrangement_content, available_compositions):
-	d = _doc(text.doc_prefix + f"Edit {production['name']}", origin, ('forms.css', 'quill.snow.css')) # 'jodit.min.css'
-	button = t.button('Edit', type = 'button', onclick = f"window.location.href='/edit_production/{production['id']}'")
+	d = _doc(text.doc_prefix + f"Edit {production['name']}", origin, ('forms.css', 'quill.2.0.2.snow.css')) # 'jodit.min.css'
+	button = t.button('Edit', type = 'button', onclick = f"location.assign('/edit_production/{production['id']}')")
 	with d:
 		t.div(cls = 'gray_screen hide', id = 'gray_screen_div', onclick = 'hide_dialogs()') # invisible at first; for big_focus_box dialog-box, later..
 		with t.div(cls = 'full_screen'):
 			with t.div(cls = 'header'):
-				t.div('DRIVE', cls = 'buttonish header_item', onclick = f"window.location.href='/drive/{production['id']}'")
+				t.div('DRIVE', cls = 'buttonish header_item', onclick = f"location.replace('/drive/{production['id']}');")
+			_add_content_editors()
 			#_production_form('Details...', form, button, True, production, None) # -- this is too bulky, especially since it can't be scrolled off the screen (this is by design); so, simplify...
 			with t.div(cls = 'flexrow center40'):
 				t.div(t.b(f"{production['name']} - {_format_date_time(production['scheduled'])}", cls = 'rowitem'))
@@ -259,7 +292,7 @@ def edit_production_arrangements(ws_url, form, origin, production, arrangement_t
 
 	with d:
 		t.script(_js_ws(ws_url))
-		add_scripts(origin, ('basic.js', 'ws.js', 'quill.min.js', 'edit.js', 'common.js',)) # 'jodit.min.js', 'jodit/jodit-3.24.5/build/jodit.min.js', 'nicedit/nicEdit.js', 'tinymce/tinymce.min.js', 'editorjs/editorjs.mjs', OR JUST quill.js to TEST!
+		add_scripts(origin, ('basic.js', 'ws.js', 'quill.2.0.2.js', 'dialog.js', 'edit.js', 'common.js',)) # 'jodit.min.js', 'jodit/jodit-3.24.5/build/jodit.min.js', 'nicedit/nicEdit.js', 'tinymce/tinymce.min.js', 'editorjs/editorjs.mjs', OR JUST quill.js to TEST!
 
 	return d.render()
 	
@@ -273,7 +306,7 @@ def new_arrangement(form, origin):
 		t.div(id = 'close_arrangements') # filled with arrangements that may already fit the bill, based on new arrangement composition selection / name
 
 		t.script(_js_ws(ws_url))
-		add_scripts(origin, ('basic.js', 'ws.js', 'edit.js'))
+		add_scripts(origin, ('basic.js', 'ws.js', 'dialog.js', 'edit.js'))
 
 	return d.render()
 
@@ -424,6 +457,37 @@ def _format_date_time(dt, include_time = True):
 		fmt += ' (%H:%M)'
 	return dt.strftime(fmt)
 
+def _add_content_editors():
+	# Content editor:
+	with t.div(id = 'content_text_div', cls = 'big_focus_box hide'):
+		with t.div(cls = 'button_band'):
+			fr = 'edit_content_title'
+			t.label('Title: ', fr = fr)
+			t.input_(type = 'text', id = fr, name = fr, placeholder = 'Type title here')
+			t.button('Upload...', cls = 'buttonish', onclick = 'file_input_2.click()' ) # See g_file_input_2 in edit.js for handling
+			t.button('Cancel', cls = 'buttonish push', onclick = 'hide_content_text_div()')
+			t.button('Save', cls = 'buttonish', onclick = 'set_composition_content(false)')
+		t.hr()
+		t.input_(type = 'file', id = 'file_input_2', multiple = 'true', hidden = 'true')
+		t.textarea(id = 'composition_plain_content', cls = 'full_width_height', placeholder = 'Type content here...')
+	# BEGIN: !!!DUPLICATED code, from above, but "new style" content editor:
+	with t.div(id = 'content_rich_text_div', cls = 'biggest_focus_box hide'):
+		with t.div(cls = 'button_band'):
+			fr = 'edit_rich_content_title'
+			t.label('Title: ', fr = fr)
+			t.input_(type = 'text', id = fr, name = fr, placeholder = 'Type title here')
+			t.button('Cancel', cls = 'buttonish push', onclick = 'hide_content_text_div()')
+			t.button('Save', cls = 'buttonish', onclick = 'set_composition_content(true)')
+		t.hr()
+		t.input_(type = 'file', id = 'file_input', multiple = 'true', hidden = 'true')
+		t.div(id = 'composition_rich_content')
+
+def _add_rich_content_driver():
+	# Add a biggest_focus_box (also hidden) for DRIVING rich-text content:
+	with t.div(id = 'content_rich_text_drive_div', cls = 'biggest_focus_box hide'):
+		t.div(id = 'composition_rich_content_drive')
+
+
 '''
 composition_content:
 	arrangement_composition_id = arrangement_composition_id,
@@ -455,29 +519,6 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 						t.div(composition_title, cls = 'pointered', onclick = f'insert_composition({composition_id})')
 				else:
 					t.div("None exist yet... create one with the 'New...' button above!")
-			# Content editor:
-			with t.div(id = 'content_text_div', cls = 'big_focus_box hide'):
-				with t.div(cls = 'button_band'):
-					fr = 'edit_content_title'
-					t.label('Title: ', fr = fr)
-					t.input_(type = 'text', id = fr, name = fr, placeholder = 'Type title here')
-					t.button('Upload...', cls = 'buttonish', onclick = 'file_input_2.click()' ) # See g_file_input_2 in edit.js for handling
-					t.button('Cancel', cls = 'buttonish push', onclick = 'hide_content_text_div()')
-					t.button('Save', cls = 'buttonish', onclick = 'set_composition_content(false)')
-				t.hr()
-				t.input_(type = 'file', id = 'file_input_2', multiple = 'true', hidden = 'true')
-				t.textarea(id = 'composition_plain_content', cls = 'full_width_height', placeholder = 'Type content here...')
-			# BEGIN: !!!DUPLICATED code, from above, but "new style" content editor:
-			with t.div(id = 'content_rich_text_div', cls = 'biggest_focus_box hide'):
-				with t.div(cls = 'button_band'):
-					fr = 'edit_rich_content_title'
-					t.label('Title: ', fr = fr)
-					t.input_(type = 'text', id = fr, name = fr, placeholder = 'Type title here')
-					t.button('Cancel', cls = 'buttonish push', onclick = 'hide_content_text_div()')
-					t.button('Save', cls = 'buttonish', onclick = 'set_composition_content(true)')
-				t.hr()
-				t.input_(type = 'file', id = 'file_input', multiple = 'true', hidden = 'true')
-				t.div(id = 'composition_rich_content')
 
 	# Render the content:
 	if composition_content:
@@ -500,8 +541,7 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 							t.div(txt[len(start):end] + '...')
 						elif not txt.startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
 							if txt.lower().endswith('.jpg') or txt.lower().endswith('.mp4'):
-								#t.div(t.img(src = origin + f'/static/images/{txt}{k_thumb_suffix}', width = 300))
-								t.div(t.img(src = origin + f'{txt}{k_thumb_suffix}', width = 300))
+								t.div(t.img(src = origin + f'/static/uploads/{composition_content.arrangement_composition_id}/{txt}{k_thumb_suffix}', width = 300))
 							else:
 								t.div(txt)
 			t.hr()

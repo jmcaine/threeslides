@@ -9,9 +9,12 @@ import functools
 import io
 import json
 import logging
+import pathlib
 import re
 import time
 import traceback
+
+from dataclasses import dataclass
 
 import datetime as dt
 
@@ -34,6 +37,7 @@ from aiohttp_session.cookie_storage import EncryptedCookieStorage
 #import aioredis
 #from aiohttp_session import memcached_storage
 #fmport aiomcache
+# TODO: Note warning in debug/console client-side: '''Cookie “AIOHTTP_SESSION” does not have a proper “SameSite” attribute value. Soon, cookies without the “SameSite” attribute or with an invalid value will be treated as “Lax”. This means that the cookie will no longer be sent in third-party contexts. If your application depends on this cookie being available in such contexts, please add the “SameSite=None“ attribute to it. To know more about the “SameSite“ attribute, read https://developer.mozilla.org/docs/Web/HTTP/Headers/Set-Cookie/SameSite''' -- see set_cookie, with samesite arg, in https://docs.aiohttp.org/en/stable/web_reference.html ... but we're probably talking about some core setting that will auto-apply to the “AIOHTTP_SESSION” cookie itself, which we don't set explicitly ourselves.
 
 from yarl import URL
 
@@ -64,6 +68,7 @@ l = logging.getLogger(__name__)
 
 # Globals -----------------------------------------------------------------------
 
+#TODO!!: put ALL of this "global" stuff into app['key'] storage instead of leaving global like this!  see https://docs.aiohttp.org/en/stable/web_advanced.html#data-sharing-aka-no-singletons-please
 # Can't store coroutines in sessions, directly; not even redis or memcached directories, so we store them in global memory, in this dict:
 g_twixt_work = {} # TODO: note, we 'del g_twixt_work[twixt_id]' and 'del session['twixt_id']' "as we go", but there's a real possibility of abandonment (as in, a page fails to fully load or to create the ws in its javascript, so the first ws_messages call never issues) -- so we should make a watchdog that cleans this out occasionally; thus, we'd need timestamps on the items within, as well
 
@@ -73,6 +78,13 @@ g_announcement_id = 1
 g_current_ac_id = 0
 g_current_phrase_id = 0
 
+@dataclass
+class RCIndex:
+	scroll_to_index: int
+	media_path: str
+g_current_rich_content_indeces = []
+g_current_rich_content_current_index = 0
+k_thumb_appendix = '.small.jpg'
 
 # Utils -----------------------------------------------------------------------
 
@@ -247,10 +259,17 @@ async def watch(rq):
 	show_hidden = bool(rq.query.get('show_hidden', False))
 	cut_frame = bool(rq.query.get('cut_frame', False))
 	session = await get_session(rq)
-	session['config'] = {'show_hidden': show_hidden, 'cut_frame': cut_frame}
+	session['config'] = {'show_hidden': show_hidden, 'cut_frame': cut_frame, 'font_size': 'large'}
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
 	return hr(html.watch(_origin(rq), _ws_url(rq), lp, show_hidden, cut_frame))
 
+@rt.get('/watch_captioned/{production_id}')
+async def watch_captioned(rq):
+	#session = await get_session(rq)
+	session = await get_session(rq)
+	session['config'] = {'show_hidden': False, 'cut_frame': False, 'font_size': 'small'}
+	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
+	return hr(html.watch_captioned(_origin(rq), _ws_url(rq), lp))
 
 # ------------------------
 
@@ -289,7 +308,6 @@ class Edit_Production_Service(web.View):
 			raise # move on
 		except: # TODO: differentiate, and add errors to hr!
 			l.error(traceback.format_exc())
-			l.debug('EXCEPTION in Edit_Production::post()!!!') #TODO
 			if pid:
 				production = await db.get_production(z.dbc, pid)
 				templates = None
@@ -351,7 +369,7 @@ class Create_Arrangement(web.View):
 		except web.HTTPRedirection:
 			raise # move on
 		except: # TODO: differentiate, and add errors to hr!
-			l.debug('EXCEPTION in Create_Arrangement::post()!!!')
+			l.error('EXCEPTION in Create_Arrangement::post(): ' + traceback.format_exc())
 			return hr(html.new_arrangement(html.Form(z.rq.rel_url)))
 
 
@@ -364,7 +382,8 @@ async def ws(rq):
 	session = await get_session(rq)
 
 	handlers = {
-		'init': _ws_init,
+		#'init': _ws_init, --- 'init' is handled specially, after all, before normal processing...
+		'init': _ignore_message,
 		'ping': _ws_ping_pong,
 		'drive': _ws_drive,
 		'edit': _ws_edit,
@@ -373,7 +392,7 @@ async def ws(rq):
 		'fetch_new_announcement': _ws_fetch_new_announcement,
 	}
 	
-	hd = handler_data = U.Struct(
+	hd = handler_data = U.Struct( # TODO: use @dataclass instead! (this code predated dataclasses in python!)
 		rq = rq,
 		ws = ws,
 		session = session,
@@ -391,8 +410,20 @@ async def ws(rq):
 	)
 	
 	try:
-		l.info('new websocket established...')
+		# Handshake carefully (necessary... see code/comments below for some detail, as well as ws.onopen() in drive.js or edit.js):
+		l.info('new websocket established; hand-shaking...')
 		await ws.send_json({'task': 'init'})
+		while True:
+			try:
+				hd.payload = await ws.receive_json(timeout = 0.2)
+				assert hd.payload['task'] == 'init', "initial message must be an 'init' response"
+				await _ws_init(hd)
+				break # out of while loop
+			except asyncio.TimeoutError as e: # timed out; try again:
+				await ws.send_json({'task': 'init'}) # it seems that initial sends will often fail, as, though the web socket was set up by the client side, initially, and we're handling the opening of this socket here in this function, and have called ws.prepare() and everything... still, sometimes the initial 'init' sent goes unheaded; likewise, if we initialize the send from the client, it often isn't read here.  One solution seems to be to always wait a second before sending the initial, but this tight while-loop is more robust
+		l.info('... "init" handshake complete; websocket ready for normal messages.')
+
+		# Now we can begin indefinitely processing normal messages:
 		async for msg in ws:
 			if msg.type == WSMsgType.ERROR:
 				raise ws.exception()
@@ -433,6 +464,9 @@ def _ws_url(rq, name = None):
 	#	http://domain.tld/quiz/history/sequence --> ws://domain.tld/<name>
 	return URL.build(scheme = settings.k_ws, host = rq.host, path = settings.k_ws_url_prefix + name if name else '/ws')
 
+async def _ignore_message(hd):
+	l.info('got a message that we should ignore; e.g., an extra "init", due to startup irregularity')
+
 async def _ws_init(hd):
 	if 'lpi_id' in hd.payload:
 		hd.lpi_id = hd.payload['lpi_id'] # lpi = "live production INDEX"; lpi_id = id of that index record in DB
@@ -443,7 +477,6 @@ async def _ws_add_watcher(hd):
 
 
 async def _ws_add_driver(hd):
-	l.debug('added driver!')
 	hd.lpi.drivers.add(hd.ws)
 
 async def _ws_ping_pong(hd):
@@ -484,17 +517,91 @@ async def _set_new_live_phrase(hd, ac_id, phrase_id, exclude_self = True):
 	#hd.session['current_ac_id'] = ac_id # see the NOTE on g_current_ac_id declaration!
 	#hd.session['current_phrase_id'] = phrase_id # see the NOTE on g_current_phrase_id declaration!
 	phrase = await db.get_phrase(hd.dbc, phrase_id)
-	await _send_phrase_to_watchers(hd, phrase)
-	await _send_new_live_phrase_id_to_other_drivers(hd, html.phrase_div_id(ac_id, phrase_id), exclude_self)
 
-async def _set_x_phrase(func, hd):
+	global g_current_rich_content_indeces
+	global g_current_rich_content_current_index
+	g_current_rich_content_indeces = []
+	g_current_rich_content_current_index = 0
+	if phrase.content_type == 2: # TODO: hardcode content_type!!!
+		assert len(phrase.content) == 1, 'type-2 content (rich text) only comes in a one-content-record-per-phrase flavor'
+		# These next few lines rely heavily on the design of the quill rich-text data scheme, called "Delta", which is a dict that looks something like: {"ops": [ {"insert":"Hello "}, ...}
+		content = phrase.content[0]['content']
+		scroll_to_index = 0
+		media_path = None
+		for d in json.loads(content)['ops']:
+			if 'insert' in d:
+				ins = d['insert']
+				if isinstance(ins, str):
+					scroll_to_index += len(ins)
+				elif isinstance(ins, dict) and 'image' in ins:
+					media_path = ins['image']
+					scroll_to_index += 1 # every image counts as one more for "scroll-to", in Quill
+					g_current_rich_content_indeces.append(RCIndex(scroll_to_index, media_path))
+
+		# Update all drivers (yes, including the primary driver causing this action in the first place):
+		await asyncio.gather(*[ws.send_json({
+			'task': 'show_rich_composition_content',
+			'content': content,
+		}) for ws in hd.lpi.drivers])
+		# ...and update all watchers with the first image in the set:
+		await _send_media_to_watchers(hd, g_current_rich_content_indeces[0].media_path.rstrip(k_thumb_appendix))
+	else: #?TODO OR, make `phrase` something that can indeed be sent, in-tact, to watchers (and other drivers?!?) - think this just needs to biffurcate here
+		await _send_phrase_to_watchers(hd, phrase)
+		await _send_new_live_phrase_id_to_drivers(hd, html.phrase_div_id(ac_id, phrase_id), exclude_self)
+
+
+async def drive_forward(hd):
+	global g_current_rich_content_current_index
+	global g_current_rich_content_indeces
+	if len(g_current_rich_content_indeces) > 0:
+		g_current_rich_content_current_index = min(g_current_rich_content_current_index + 1, len(g_current_rich_content_indeces) - 1)
+		await _drive_x_update_all(hd, g_current_rich_content_indeces[g_current_rich_content_current_index], False)
+	else:
+		await _drive_x_phrase(hd, db.get_next_phrase)
+
+async def drive_back(hd):
+	global g_current_rich_content_current_index
+	global g_current_rich_content_indeces
+	if len(g_current_rich_content_indeces) > 0:
+		g_current_rich_content_current_index = max(g_current_rich_content_current_index - 1, 0)
+		await _drive_x_update_all(hd, g_current_rich_content_indeces[g_current_rich_content_current_index], False)
+	else:
+		await _drive_x_phrase(hd, db.get_previous_phrase)
+
+async def drive_selection(hd):
+	global g_current_rich_content_current_index
+	global g_current_rich_content_indeces
+	previous = 0
+	cursor = int(hd.payload['cursor'])
+	rci = None
+	for i in range(len(g_current_rich_content_indeces) - 1):
+		rci = g_current_rich_content_indeces[i + 1]
+		if previous <= cursor and cursor < rci.scroll_to_index:
+			g_current_rich_content_current_index = i
+			rci = g_current_rich_content_indeces[i]
+			break
+		previous = rci.scroll_to_index
+	await _drive_x_update_all(hd, rci, True)
+
+async def _drive_x_update_all(hd, rich_content_index, exclude_self = True):
+	exclusion = ws != hd.ws if exclude_self else True
+	# Send update to watchers:
+	await _send_media_to_watchers(hd, rich_content_index.media_path.rstrip(k_thumb_appendix))
+	# Update drivers' positions:
+	await asyncio.gather(*[ws.send_json({
+		'task': 'update_live_rich_content_position',
+		'selection_idx': rich_content_index.scroll_to_index,
+	}) for ws in hd.lpi.drivers if exclusion])
+
+async def _drive_x_phrase(hd, func):
 	global g_current_ac_id
 	global g_current_phrase_id
-
 	phrase_id = await func(hd.dbc, g_current_ac_id, g_current_phrase_id)
 	if phrase_id:
 		await _set_new_live_phrase(hd, g_current_ac_id, phrase_id, False)
 	# else, do NOTHING! (probably at the end of the line - last phrase in the composition)
+
+
 
 async def _ws_drive(hd):
 	#TODO consider: from js: ws_send({task: "drive", action: "live", id: content_id});
@@ -510,11 +617,6 @@ async def _ws_drive(hd):
 			await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		case 'live_phrase_id':
 			await _set_new_live_phrase(hd, int(hd.payload['ac_id']), int(hd.payload['phrase_id']))
-		case 'live_composition_id_DEPRECATE': # happens, e.g., when somebody clicks on "verse 3" ("header text", rather than clicking on the verse 3 "body")
-			# TODO: DEPRECATE; we don't use this any more!!
-			phrase = await db.get_composition_first_phrase(hd.dbc, int(hd.payload['composition_id']))
-			await _send_phrase_to_watchers(hd, phrase)
-			await _send_new_live_phrase_id_to_other_drivers(hd, aaa)
 		case 'live_arrangement_id': # happens when somebody (in /drive) clicks on a new arrangement (title)
 			arrangement_id = int(hd.payload['arrangement_id'])
 			content = await _send_arrangement_content(hd, arrangement_id, 'drive_live_phrase', html._content_title)
@@ -534,23 +636,18 @@ async def _ws_drive(hd):
 		case 'reset_video':
 			await asyncio.gather(*[ws.send_json({'task': 'reset_video'}) for ws in hd.lpi.watchers.keys()])
 		case 'forward':
-			await _set_x_phrase(db.get_next_phrase, hd)
+			await drive_forward(hd)
 		case 'back':
-			await _set_x_phrase(db.get_previous_phrase, hd)
+			await drive_back(hd)
+		case 'selection':
+			await drive_selection(hd)
 		case _:
 			l.error(f'''Action "{hd.payload['action']}" not recognized!''')
 
 async def _send_phrase_to_watchers(hd, phrase):
-	origin = _origin(hd.rq)
 	txt = str(phrase.content[0]['content']) if phrase.content and len(phrase.content) >= 1 else ''
-	if txt.lower().endswith('.jpg'): # TODO: KLUDGY
-		image = origin + f"/static/images/{txt}"
-		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
-		await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': image}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
-	elif txt.endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
-		video = origin + f"/static/videos/{txt}"
-		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
-		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': video, 'repeat': 0}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
+	if txt.lower().endswith(('.jpg', '.mp4', '.mov', '.mkv')):
+		await _send_media_to_watchers(hd, txt)
 	else:
 		sends = []
 		for ws, watcher in hd.lpi.watchers.items(): # TODO: separate "royal watchers" from plebians?
@@ -564,7 +661,7 @@ async def _send_phrase_to_watchers(hd, phrase):
 		await asyncio.gather(*sends)
 		
 
-async def _send_new_live_phrase_id_to_other_drivers(hd, div_id, exclude_self = True):
+async def _send_new_live_phrase_id_to_drivers(hd, div_id, exclude_self = True):
 	exclusion = ws != hd.ws if exclude_self else True
 	await asyncio.gather(*[ws.send_json({
 		'task': 'update_live_phrase_id',
@@ -579,16 +676,19 @@ async def _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, conten
 		'arrangement_content': content_div,
 	}) for ws in hd.lpi.drivers if ws != hd.ws])
 
+async def _send_media_to_watchers(hd, path, repeat = 0):
+	#OLD: image = origin + f"/static/images/{path}" and ... /videos/...
+	origin = _origin(hd.rq)
+	path = origin + path
+	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
+	if path.lower().endswith(('.jpg', 'png', )): # TODO: KLUDGY... and add more image types?
+		await asyncio.gather(*[ws.send_json({'task': 'image', 'image': path}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
+	elif path.lower().endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
+		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': path, 'repeat': repeat}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
+
 async def _send_new_bg_to_watchers(hd, background):
 	if background: # no-op, otherwise
-		origin = _origin(hd.rq)
-		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
-		if background.lower().endswith('.jpg'):
-			bg = origin + f'/static/bgs/{background}'
-			await asyncio.gather(*[ws.send_json({'task': 'bg', 'bg': bg}) for ws in hd.lpi.watchers.keys()])
-		elif background.lower().endswith('.mp4'):
-			bg = origin + f'/static/bgs/videos/{background}'
-			await asyncio.gather(*[ws.send_json({'task': 'video', 'video': bg, 'repeat': 1}) for ws in hd.lpi.watchers.keys()])
+		await _send_media_to_watchers(hd, 'bgs/' + background, repeat = 1)
 
 async def _handle_announcements_arrangement(hd, arrangement_id):
 	# Announcements TODO: kludgy!
@@ -600,34 +700,34 @@ async def _handle_announcements_arrangement(hd, arrangement_id):
 		return False #TODO: kludgy!
 
 async def _ws_binary(hd, data):
-	assert(data[0] == ord('!')) # "magic byte" ! to indicate this is a file upload (by convention)
+	assert data[0] == ord('!'), '"magic byte" ! needed to indicate this is a file upload (by convention)'
 	delimiter = b'\r\n\r\n'
 	idx = data.find(delimiter)
 	meta = json.loads(data[1:idx]) # '1' to get past the "magic byte" ('!')
 	meta['files'] = json.loads(meta['files'])
 	payload = data[idx+len(delimiter):]
-	assert(meta['action'] == 'upload_files')
+	assert meta['action'] == 'upload_files', '"upload_files" is the only action (currently) tied to a binary upload'
 	reply_type = meta['reply_type']
-	path = '/static/uploads'
+	path = f'static/uploads/{meta["acid"]}/' # use the acid id # to uniquely partition off these file uploads from other (potentially similarly-named) uploads
+	pathlib.Path(path).mkdir(parents = False, exist_ok = True) # parent dirs (static/uploads) should always already exist (and acid shouldn't have any slashes, ..s, etc.; should be just a number)
 	pos = 0
 	names = []
-	fps = []
-	thumb_urls = []
+	thumbs = []
 	for fil in meta['files']:
-		name = fil['name']
-		size = fil['size']
+		name = fil['name'] # TODO: sanitize fil['name'] first!!
 		names.append(name)
-		fps.append(f'{path}/{name}')
-
-		with open(fps[-1][1:], "wb") as file: # [1:] b/c it's convenient to keep the leading '/' on the root 'path', as it's needed almost everywhere; but not here :)
-			file.write(payload[pos:pos+size])
-		thumb_urls.append(f'{path}/{name}.small.jpg')
+		size = fil['size']
+		fp = path + name
 		img = Image.open(io.BytesIO(payload[pos:pos+size]))
-		img.thumbnail((200, 200)) # modifies img in-place
-		img.save(thumb_urls[-1][1:]) # [1:] b/c it's convenient to keep the leading '/' on the root 'path', as it's needed almost everywhere; but not here :)
+		img.save(fp)
+		#OLD: with open(fp, "wb") as file:
+		#OLD: 	file.write(payload[pos:pos+size])
+		img.thumbnail((300, 300)) # modifies img in-place
+		img.save(fp + k_thumb_appendix)
+		thumbs.append(name + k_thumb_appendix)
 		pos += size
 
-	await hd.ws.send_json({'task': 'files_uploaded', 'reply_type': reply_type, 'names': names, 'urls': fps, 'thumb_urls': thumb_urls})
+	await hd.ws.send_json({'task': 'files_uploaded', 'reply_type': reply_type, 'path': path, 'names': names, 'thumbs': thumbs})
 
 
 

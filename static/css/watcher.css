@@ -16,6 +16,9 @@ html, body {
 .black_bg {
 	background-color: black;
 }
+.green_bg { /* greenscreen */
+	background-color: green;
+}
 
 .bg_frame {
 	background-size: auto 100%;
@@ -93,9 +96,16 @@ html, body {
 .halo_content, .outline_content, .preformatted_content {
 	padding: 0.3em;
 	color: black;
+	text-align: center;
+}
+
+.content_large_font {
 	font-size: 5vw;
 	font-weight: 900;
-	text-align: center;
+}
+.content_small_font {
+	font-size: 3vw;
+	font-weight: 500;
 }
 
 .halo_content {
@@ -115,7 +125,7 @@ html, body {
 .content_text {
 	color: black;
 }
-.content_smaller_text {
+.content_smaller_text { /* consider just adding .content_small_font */
 	color: black;
 	font-size: 3vw;
 }

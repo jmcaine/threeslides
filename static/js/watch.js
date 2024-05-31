@@ -32,9 +32,9 @@ ws.onmessage = function(event) {
 		case "clear":
 			clear();
 			break;
-		case "bg":
+		case "image":
 			if (!g_show_hidden) {
-				set_background(payload.bg);
+				show_image(payload.image);
 			} // else, leave bg white (high-contrast)
 			break;
 		case "video":
@@ -135,7 +135,7 @@ function _flip_bg() {
 	g_next_bg = f;
 }
 
-function set_background(bg) {
+function show_image(bg) {
 	remove_video();
 	g_next_bg.style.backgroundImage = "url('" + bg + "')";
 	_flip_bg();
@@ -197,7 +197,7 @@ function stop_announcements() {
 }
 function next_announcement(url) {
 	//document.body.style.backgroundImage = "url('" + url + "')";
-	set_background(url);
+	show_image(url);
 }
 
 function _fade() {
