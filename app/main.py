@@ -688,7 +688,7 @@ async def _send_media_to_watchers(hd, path, repeat = 0):
 
 async def _send_new_bg_to_watchers(hd, background):
 	if background: # no-op, otherwise
-		await _send_media_to_watchers(hd, 'bgs/' + background, repeat = 1)
+		await _send_media_to_watchers(hd, '/static/uploads/bgs/' + background, repeat = 1)
 
 async def _handle_announcements_arrangement(hd, arrangement_id):
 	# Announcements TODO: kludgy!
