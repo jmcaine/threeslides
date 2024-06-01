@@ -21,6 +21,7 @@ import datetime as dt
 from sqlite3 import PARSE_DECLTYPES
 
 from PIL import Image
+import cv2
 
 from uuid import uuid4
 from cryptography import fernet
@@ -718,12 +719,21 @@ async def _ws_binary(hd, data):
 		names.append(name)
 		size = fil['size']
 		fp = path + name
-		img = Image.open(io.BytesIO(payload[pos:pos+size]))
-		img.save(fp)
-		#OLD: with open(fp, "wb") as file:
-		#OLD: 	file.write(payload[pos:pos+size])
-		img.thumbnail((300, 300)) # modifies img in-place
-		img.save(fp + k_thumb_appendix)
+		if name.lower().endswith('.mp4'):
+			with open(fp, "wb") as file:
+				file.write(payload[pos:pos+size])
+			vid = cv2.VideoCapture(fp)
+			vid.set(cv2.CAP_PROP_POS_FRAMES, int(vid.get(cv2.CAP_PROP_FRAME_COUNT)) / 2) # get thumbnail from half-way frame
+			result, image = vid.read()
+			assert result == True, "FAILED to capture frame!"
+			cv2.imwrite(fp + k_thumb_appendix, image) # only save the 50th frame as the thumbnail (because the first umpteen are often black, in a fade-from-black)
+		else: #TODO: don't assume!  check for image extensions! (.jpg, .png...)
+			img = Image.open(io.BytesIO(payload[pos:pos+size]))
+			img.save(fp)
+			#OLD: with open(fp, "wb") as file:
+			#OLD: 	file.write(payload[pos:pos+size])
+			img.thumbnail((300, 300)) # modifies img in-place
+			img.save(fp + k_thumb_appendix)
 		thumbs.append(name + k_thumb_appendix)
 		pos += size
 
