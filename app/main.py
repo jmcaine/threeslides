@@ -23,6 +23,9 @@ from sqlite3 import PARSE_DECLTYPES
 from PIL import Image
 import cv2
 
+import obsws_python as obs
+g_obsif = obs.ReqClient(host='localhost', port=4455, password='testing', timeout=3)
+
 from uuid import uuid4
 from cryptography import fernet
 import base64
@@ -547,6 +550,7 @@ async def _set_new_live_phrase(hd, ac_id, phrase_id, exclude_self = True):
 		}) for ws in hd.lpi.drivers])
 		# ...and update all watchers with the first image in the set:
 		await _send_media_to_watchers(hd, g_current_rich_content_indeces[0].media_path.rstrip(k_thumb_appendix))
+
 	else: #?TODO OR, make `phrase` something that can indeed be sent, in-tact, to watchers (and other drivers?!?) - think this just needs to biffurcate here
 		await _send_phrase_to_watchers(hd, ac_id, phrase)
 		await _send_new_live_phrase_id_to_drivers(hd, html.phrase_div_id(ac_id, phrase_id), exclude_self)
@@ -594,6 +598,9 @@ async def _drive_x_update_all(hd, rich_content_index, exclude_self = True):
 		'task': 'update_live_rich_content_position',
 		'selection_idx': rich_content_index.scroll_to_index,
 	}) for ws in hd.lpi.drivers if exclusion])
+	# And move to designated camera/obs scene:
+	global g_obsif
+	g_obsif.set_current_program_scene('scene1') # TODO: parameterize!
 
 async def _drive_x_phrase(hd, func):
 	global g_current_ac_id
