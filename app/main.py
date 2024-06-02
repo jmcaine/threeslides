@@ -547,7 +547,7 @@ async def _set_new_live_phrase(hd, ac_id, phrase_id, exclude_self = True):
 		# ...and update all watchers with the first image in the set:
 		await _send_media_to_watchers(hd, g_current_rich_content_indeces[0].media_path.rstrip(k_thumb_appendix))
 	else: #?TODO OR, make `phrase` something that can indeed be sent, in-tact, to watchers (and other drivers?!?) - think this just needs to biffurcate here
-		await _send_phrase_to_watchers(hd, phrase)
+		await _send_phrase_to_watchers(hd, ac_id, phrase)
 		await _send_new_live_phrase_id_to_drivers(hd, html.phrase_div_id(ac_id, phrase_id), exclude_self)
 
 
@@ -627,7 +627,7 @@ async def _ws_drive(hd):
 				await _send_new_bg_to_watchers(hd, content.background)
 				#REMOVED the following two lines - don't really want to auto-load first phrase, after all; always let user do it manually; always start with "blank screen"
 				#if content.children and content.children[0].phrases:
-				#	await _send_phrase_to_watchers(hd, content.children[0].phrases[0])
+				#	await _send_phrase_to_watchers(hd, acid, content.children[0].phrases[0])
 		case 'select_blank':
 			await asyncio.gather(*[ws.send_json({'task': 'set_live_content_blank'}) for ws in hd.lpi.watchers.keys()])
 		case 'play_video':
@@ -645,10 +645,10 @@ async def _ws_drive(hd):
 		case _:
 			l.error(f'''Action "{hd.payload['action']}" not recognized!''')
 
-async def _send_phrase_to_watchers(hd, phrase):
+async def _send_phrase_to_watchers(hd, ac_id, phrase):
 	txt = str(phrase.content[0]['content']) if phrase.content and len(phrase.content) >= 1 else ''
 	if txt.lower().endswith(('.jpg', '.mp4', '.mov', '.mkv')):
-		await _send_media_to_watchers(hd, txt)
+		await _send_media_to_watchers(hd, f'/static/uploads/{ac_id}/{txt}')
 	else:
 		sends = []
 		for ws, watcher in hd.lpi.watchers.items(): # TODO: separate "royal watchers" from plebians?
@@ -680,7 +680,7 @@ async def _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, conten
 async def _send_media_to_watchers(hd, path, repeat = 0):
 	#OLD: image = origin + f"/static/images/{path}" and ... /videos/...
 	origin = _origin(hd.rq)
-	path = origin + path
+	path = origin + path #'/static/uploads/{meta["acid"]}/' + path
 	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 	if path.lower().endswith(('.jpg', 'png', )): # TODO: KLUDGY... and add more image types?
 		await asyncio.gather(*[ws.send_json({'task': 'image', 'image': path}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
@@ -723,15 +723,13 @@ async def _ws_binary(hd, data):
 			with open(fp, "wb") as file:
 				file.write(payload[pos:pos+size])
 			vid = cv2.VideoCapture(fp)
-			vid.set(cv2.CAP_PROP_POS_FRAMES, int(vid.get(cv2.CAP_PROP_FRAME_COUNT)) / 2) # get thumbnail from half-way frame
+			vid.set(cv2.CAP_PROP_POS_FRAMES, int(vid.get(cv2.CAP_PROP_FRAME_COUNT)) / 2) # get thumbnail from half-way frame (because the first umpteen are often black, in a fade-from-black)
 			result, image = vid.read()
 			assert result == True, "FAILED to capture frame!"
-			cv2.imwrite(fp + k_thumb_appendix, image) # only save the 50th frame as the thumbnail (because the first umpteen are often black, in a fade-from-black)
+			cv2.imwrite(fp + k_thumb_appendix, image)
 		else: #TODO: don't assume!  check for image extensions! (.jpg, .png...)
 			img = Image.open(io.BytesIO(payload[pos:pos+size]))
 			img.save(fp)
-			#OLD: with open(fp, "wb") as file:
-			#OLD: 	file.write(payload[pos:pos+size])
 			img.thumbnail((300, 300)) # modifies img in-place
 			img.save(fp + k_thumb_appendix)
 		thumbs.append(name + k_thumb_appendix)
