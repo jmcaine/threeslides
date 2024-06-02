@@ -96,6 +96,7 @@ def hr(text): return web.Response(text = text, content_type = 'text/html')
 #   python -m aiohttp.web -H 0.0.0.0 -P 8080 app.main:init
 # "raw", and to get /static
 if settings.debug:
+	#rt.static('/static', '/home/av/threeslides/threeslides/static')
 	rt.static('/static', '/home/jmcaine/dev/projects/threeslides/static')
 
 
@@ -456,14 +457,14 @@ _gurl = lambda rq, name, parts = {}: str(rq.app.router[name].url_for(**parts))
 def _origin(rq):
 	result = rq.url
 	if settings.debug:
-		result = URL.build(scheme = result.scheme, host = result.host, port = 8080) # a bit of a kludge - comes from using adev, normally, for debugging, which serves static on a different port
+		result = URL.build(scheme = result.scheme, host = result.host, port = settings.k_port) # a bit of a kludge - comes from using adev, normally, for debugging, which serves static on a different port
 	return str(result.origin())
 
 
 def _ws_url(rq, name = None):
 	# Builds a url from `rq` (host part, mainly) and `name`, as a websocket-schemed version; e.g.
 	#	http://domain.tld/quiz/history/sequence --> ws://domain.tld/<name>
-	return URL.build(scheme = settings.k_ws, host = rq.host, path = settings.k_ws_url_prefix + name if name else '/ws')
+	return URL.build(scheme = 'ws', host = rq.host, path = name if name else '/ws')
 
 async def _ignore_message(hd):
 	l.info('got a message that we should ignore; e.g., an extra "init", due to startup irregularity')

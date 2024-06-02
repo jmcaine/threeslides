@@ -527,7 +527,7 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 			for phrase in composition_content.phrases:
 				# !!! phrase.phrase['display_scheme'] == 1 ?!
 				phrase_id = phrase.phrase['id']
-				cs = 'select_blank()' if phrase.phrase['display_scheme'] == 3 else click_script # TODO: replace hardcode "3" with map from display_scheme DB table!
+				cs = 'select_blank' if phrase.phrase['display_scheme'] == 3 else click_script # TODO: replace hardcode "3" with map from display_scheme DB table!
 				div_id = phrase_div_id(composition_content.arrangement_composition_id, phrase_id)
 				onclick = f'{cs}("{div_id}", {composition_content.arrangement_composition_id}, {phrase_id})' if cs else ''
 				cls = 'buttonish' if cs else 'pseudobuttonish'
