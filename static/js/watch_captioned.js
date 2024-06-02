@@ -1,4 +1,6 @@
 
+var g_dual_frame = false;
+
 var g_fade_timeout_id = null;
 
 var g_fading_frame = null;

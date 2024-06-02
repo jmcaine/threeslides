@@ -264,7 +264,7 @@ async def watch(rq):
 	show_hidden = bool(rq.query.get('show_hidden', False))
 	cut_frame = bool(rq.query.get('cut_frame', False))
 	session = await get_session(rq)
-	session['config'] = {'show_hidden': show_hidden, 'cut_frame': cut_frame, 'font_size': 'large'}
+	session['config'] = {'show_hidden': show_hidden, 'cut_frame': cut_frame, 'font_size': 'large', 'flatten_phrases': False}
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
 	return hr(html.watch(_origin(rq), _ws_url(rq), lp, show_hidden, cut_frame))
 
@@ -272,7 +272,7 @@ async def watch(rq):
 async def watch_captioned(rq):
 	#session = await get_session(rq)
 	session = await get_session(rq)
-	session['config'] = {'show_hidden': False, 'cut_frame': False, 'font_size': 'small'}
+	session['config'] = {'show_hidden': False, 'cut_frame': False, 'font_size': 'small', 'flatten_phrases': True}
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
 	return hr(html.watch_captioned(_origin(rq), _ws_url(rq), lp))
 
@@ -663,7 +663,7 @@ async def _send_phrase_to_watchers(hd, ac_id, phrase):
 			sends.append(ws.send_json({
 				'task': 'set_live_content',
 				'display_scheme': phrase.phrase['display_scheme'],
-				'content': html.div_phrase(watcher.config, phrase), # would be more efficient to call this just once (or once per config?!), but that's just it: the number of possibilities for different views on this, based on configs, could be ridiculous; might-as-well just construct each for each watcher
+				'content': html.div_phrase(watcher.config, phrase), # TODO: would be more efficient to call this just once (or once per config?!), but that's just it: the number of possibilities for different views on this, based on configs, could be ridiculous; might-as-well just construct each for each watcher
 				#TODO: 'bg': bg,
 			}))
 			# TODO: check now, after each, to see if there are more drive messages on the pipe that might just render these null and void?  Then abandon the dispersal until new drive message(s) are folded in?

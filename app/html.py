@@ -94,19 +94,23 @@ def div_phrase(config, phrase):
 	result = t.div(cls = f'halo_content vcenter {font_div}') if not config['show_hidden'] else t.div(cls = 'preformatted_content vcenter') # show as monospace+preformatted if we're showing chords
 	if phrase:
 		with result:
-			for content in phrase.content:
-				content_text = str(content['content'])
-				cls = 'content_text'
-				if content_text.startswith('<'):
-					cls = 'content_smaller_text'
-					content_text = content_text.strip('<')
-				elif content_text.startswith('['): #and content_text.endswith(']'): # chord line - note, removed the endswith(']') requirement b/c it's more common for there to be final spaces or an accidental non-closure than it is for somebody to want an opening [ but not mean for it to be hidden/note text!
-					if not config['show_hidden']:
-						continue # skip this (chord) line
-					#else:
-					content_text = content_text.replace('[', ' ').strip(']') # replace '[' with ' ' to keep the spacing right; just strip off the ']' on the end
-					cls = 'content_chord'
-				t.div(content_text, cls = cls)
+			if config['flatten_phrases']:
+				content_texts = [str(content['content']) for content in phrase.content if not str(content['content']).startswith('[')]
+				t.div(' '.join(content_texts), cls = 'content_text')
+			else:
+				for content in phrase.content:
+					content_text = str(content['content'])
+					cls = 'content_text'
+					if content_text.startswith('<'):
+						cls = 'content_smaller_text'
+						content_text = content_text.strip('<')
+					elif content_text.startswith('['): #and content_text.endswith(']'): # chord line - note, removed the endswith(']') requirement b/c it's more common for there to be final spaces or an accidental non-closure than it is for somebody to want an opening [ but not mean for it to be hidden/note text!
+						if not config['show_hidden']:
+							continue # skip this (chord) line
+						#else:
+						content_text = content_text.replace('[', ' ').strip(']') # replace '[' with ' ' to keep the spacing right; just strip off the ']' on the end
+						cls = 'content_chord'
+					t.div(content_text, cls = cls)
 	return result.render()
 
 
