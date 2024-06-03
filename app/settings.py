@@ -8,6 +8,10 @@ debug = True
 
 # deployment port:
 k_port = 8080
+#k_port = 8462
+
+debug_static = '/home/jmcaine/dev/projects/threeslides/static'
+#debug_static = '/home/av/threeslides/threeslides/static'
 
 # DB:
 db_filename = 'threeslides-2022.db'
