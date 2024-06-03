@@ -22,9 +22,7 @@ from sqlite3 import PARSE_DECLTYPES
 
 from PIL import Image
 import cv2
-
 import obsws_python as obs
-g_obsif = obs.ReqClient(host='localhost', port=4455, password='testing', timeout=3)
 
 from uuid import uuid4
 from cryptography import fernet
@@ -81,6 +79,7 @@ g_announcement_id = 1
 #NOTE: we used to use hd.session['current_ac_id'] and ...'current_phrase'..., but we need all drivers to be on the same page; we actually need another concept, of a "current show" or something, to which all drivers are connected, so that a server can run more than one show simultaneously if wanted (maybe we need this?  It would be more of a centralized-server model, rather than a server-at-the-prjector-itself model....)
 g_current_ac_id = 0
 g_current_phrase_id = 0
+
 
 @dataclass
 class RCIndex:
@@ -599,8 +598,16 @@ async def _drive_x_update_all(hd, rich_content_index, exclude_self = True):
 		'selection_idx': rich_content_index.scroll_to_index,
 	}) for ws in hd.lpi.drivers if exclusion])
 	# And move to designated camera/obs scene:
-	global g_obsif
-	g_obsif.set_current_program_scene('scene1') # TODO: parameterize!
+	if settings.obs:
+		for i in range(2): # if fails the first time, try again after a re-connect attempt:
+			try:
+				hd.rq.app['obsif'].set_current_program_scene(settings.obs_scene)
+				break
+			except:
+				if i == 1:
+					l.error('OBS connect failed to re-initialize after a failed call to set_current_program_scene()... giving up for now.')
+				#else, the first time 'round, try re-initializing:
+				_init_obs(hd.rq.app, 0.8) # and then loop back and try again
 
 async def _drive_x_phrase(hd, func):
 	global g_current_ac_id
@@ -933,21 +940,35 @@ async def _set_up_common_post(request, dbc = True, uuid = True, data = True, re_
 
 # Init / Shutdown -------------------------------------------------------------
 
-async def init_db(filename):
-	conn = await aiosqlite.connect(filename, isolation_level = None, detect_types = PARSE_DECLTYPES) # "isolation_level = None disables the Python wrapper's automatic handling of issuing BEGIN etc. for you. What's left is the underlying C library, which does do "autocommit" by default. That autocommit, however, is disabled when you do a BEGIN (b/c you're signaling a transaction with that statement" - from https://stackoverflow.com/questions/15856976/transactions-with-python-sqlite3 - thanks Thanatos
+async def _init(app):
+	await _init_db(app)
+	_init_obs(app, 3)
+	app['lps'] = {}
+
+async def _init_db(app):
+	l.info('Initializing database...')
+
+	conn = await aiosqlite.connect(settings.db_filename, isolation_level = None, detect_types = PARSE_DECLTYPES) # "isolation_level = None disables the Python wrapper's automatic handling of issuing BEGIN etc. for you. What's left is the underlying C library, which does do "autocommit" by default. That autocommit, however, is disabled when you do a BEGIN (b/c you're signaling a transaction with that statement" - from https://stackoverflow.com/questions/15856976/transactions-with-python-sqlite3 - thanks Thanatos
 	conn.row_factory = aiosqlite.Row
 	await conn.execute('pragma journal_mode = wal') # see https://charlesleifer.com/blog/going-fast-with-sqlite-and-python/ - since we're using async/await from a wsgi stack, this is appropriate
 	await conn.execute('pragma foreign_keys = ON')
 	#await conn.execute('pragma case_sensitive_like = true')
 	#await conn.set_trace_callback(l.debug) - not needed with aiosqlite, anyway
-	return conn # consider conn.cursor(), instead, according to more "typical" use; sqlite3 has an "efficient" approach that involves just using the database directly (a temp cursor is auto-created under the hood): https://pysqlite.readthedocs.io/en/latest/sqlite3.html#using-sqlite3-efficiently
 
-async def _init(app):
-	l.info('Initializing database...')
-	app['db'] = await init_db('threeslides-2022.db')
-	#app['db'] = await init_db('working.db')
-	app['lps'] = {}
+	app['db'] = conn # consider conn.cursor(), instead, according to more "typical" use; sqlite3 has an "efficient" approach that involves just using the database directly (a temp cursor is auto-created under the hood): https://pysqlite.readthedocs.io/en/latest/sqlite3.html#using-sqlite3-efficiently
+
 	l.info('...database initialized')
+
+def _init_obs(app, timeout):
+	app['obsif'] = None
+	if settings.obs:
+		l.info(f'Initializing OBS connection (trying for {timeout} seconds)...')
+		try:
+			app['obsif'] = obs.ReqClient(host = settings.obs_host, port = settings.obs_port, password = settings.obs_password, timeout = timeout)
+			l.info('...OBS connection initialized')
+		except:
+			l.info('... FAILED to connect to OBS. (Note: connection not required if OBS integration is not desired.)')
+
 	
 async def _shutdown(app):
 	l.info('Shutting down...')
