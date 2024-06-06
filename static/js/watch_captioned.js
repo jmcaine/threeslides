@@ -33,9 +33,6 @@ ws.onmessage = function(event) {
 		case "pause_video":
 		case "reset_video":
 		case "remove_video":
-		case "start_announcements":
-		case "stop_announcements":
-		case "next_announcement":
 			break;
 		case "pong":
 			// good! TODO: do something about this(?), even though there's nothing more to do to complete the loop (we'll send the next ping according to a timer (below); no need to "send" anything now, in reply)

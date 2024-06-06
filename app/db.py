@@ -335,10 +335,13 @@ async def get_flat_composition_content(dbc, composition_id):
 		phrases = await _get_phrases(dbc, composition_id),
 	)
 
-_get_x_phrase = lambda comparator, desc_asc: f'select phrase.id from phrase join composition on composition.id = phrase.composition join arrangement_composition on arrangement_composition.composition = composition.id where arrangement_composition.id = ? and phrase.seq {comparator} (select phrase.seq from phrase where phrase.id = ?) order by phrase.seq {desc_asc} limit 1'
+_get_x_phrase_base = 'select phrase.id from phrase join composition on composition.id = phrase.composition join arrangement_composition on arrangement_composition.composition = composition.id where arrangement_composition.id = ?'
+_get_x_phrase = lambda comparator, desc_asc: f'{_get_x_phrase_base} and phrase.seq {comparator} (select phrase.seq from phrase where phrase.id = ?) order by phrase.seq {desc_asc} limit 1'
 
 async def get_next_phrase(dbc, ac_id, phrase_id):
 	result = await fetchone(dbc, (_get_x_phrase('>', 'asc'), (ac_id, phrase_id)))
+	if not result:
+		result = await fetchone(dbc, (_get_x_phrase_base + ' order by phrase.seq limit 1', (ac_id,))) # get the first one (again)
 	return result['id'] if result else None
 
 async def get_previous_phrase(dbc, ac_id, phrase_id):

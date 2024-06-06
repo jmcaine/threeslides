@@ -8,7 +8,6 @@ var g_dual_frame = false;
 //const c_half_frame_opposites = ['top_frame_slide_A', 'bottom_frame_slide_A', 'top_frame_slide_B', 'bottom_frame_slide_B']
 //var g_current_full_frame_slide = 0;
 
-var g_announcement_interval = null;
 var g_fade_timeout_id = null;
 
 var g_fading_frame = null;
@@ -23,14 +22,17 @@ ws.onmessage = function(event) {
 	var payload = JSON.parse(event.data);
 	//console.log("payload.task = " + payload.task);
 	switch(payload.task) {
-		case "set_live_content":
-			set_live_content(payload.display_scheme, payload.content, payload.bg);
+		case "init":
+			init();
 			break;
 		case "reset":
 			reset();
 			break;
 		case "clear":
 			clear();
+			break;
+		case "set_live_content":
+			set_live_content(payload.display_scheme, payload.content, payload.bg);
 			break;
 		case "image":
 			if (!g_show_hidden) {
@@ -39,7 +41,7 @@ ws.onmessage = function(event) {
 			break;
 		case "video":
 			if (!g_show_hidden) {
-				show_video(payload.video, payload.repeat);
+				show_video(payload.video, payload.repeat, payload.auto_advance_notify);
 			} // else, leave bg white (high-contrast)
 			break;
 		case "play_video":
@@ -64,18 +66,6 @@ ws.onmessage = function(event) {
 			break;
 		case "set_live_content_blank":
 			set_live_content(1, "", 0); // TODO: fix hardcodes!
-			break;
-		case "init":
-			init();
-			break;
-		case "start_announcements":
-			start_announcements();
-			break;
-		case "stop_announcements":
-			stop_announcements();
-			break;
-		case "next_announcement":
-			next_announcement(payload.url);
 			break;
 		case "pong":
 			// good! TODO: do something about this(?), even though there's nothing more to do to complete the loop (we'll send the next ping according to a timer (below); no need to "send" anything now, in reply)
@@ -141,12 +131,13 @@ function show_image(bg) {
 	_flip_bg();
 }
 
-function show_video(video, repeat) {
+function show_video(video, repeat, auto_advance_notify) {
 	// remove bg image:
 	g_next_bg.style.backgroundImage = "none";
 	_flip_bg();
 	// add the video:
-	vid = $('the_video')
+	vid = $('the_video');
+	vid.removeEventListener('ended', _send_next_auto_advance); // in case any are outstanding
 	if (repeat) {
 		vid.setAttribute('loop', '');
 	} else {
@@ -157,8 +148,16 @@ function show_video(video, repeat) {
 	vid.classList.remove('hide');
 	vid.classList.add('show');
 
+	if (auto_advance_notify) {
+		vid.addEventListener('ended',_send_next_auto_advance);
+	}
+
 	$('the_video').play();
 	//vid.play();
+}
+
+function _send_next_auto_advance() {
+	ws_send({task: "next_auto_advance"});
 }
 
 function play_video() {
@@ -173,31 +172,6 @@ function reset_video() {
 function remove_video() {
 	$('the_video').pause()
 	$('the_video').classList.add('hide');
-}
-
-function fetch_new_announcement() {
-	if (!ws) return;
-	if (ws.readyState !== WebSocket.OPEN) return;
-	// else:
-	ws_send({task: "fetch_new_announcement"});
-};
-function start_announcements() {
-	if (g_announcement_interval == null) {
-		reset();
-		ws_send({task: "fetch_new_announcement"}); // fetch first right away
-		g_announcement_interval = setInterval(fetch_new_announcement, 10000); // 10-second heartbeat; default timeouts (like nginx) are usually set to 60-seconds
-	} // else announcements are already going
-}
-
-function stop_announcements() {
-	if (g_announcement_interval != null) {
-		clearInterval(g_announcement_interval);
-		g_announcement_interval = null;
-	}
-}
-function next_announcement(url) {
-	//document.body.style.backgroundImage = "url('" + url + "')";
-	show_image(url);
 }
 
 function _fade() {

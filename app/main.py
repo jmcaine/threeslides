@@ -18,18 +18,19 @@ from dataclasses import dataclass
 
 import datetime as dt
 
-from sqlite3 import PARSE_DECLTYPES
-
-from PIL import Image
-import cv2
-import obsws_python as obs
+from os.path import exists as path_exists
+from os import listdir
 
 from uuid import uuid4
 from cryptography import fernet
 import base64
 
-from os.path import exists as path_exists
-#import os
+
+from sqlite3 import PARSE_DECLTYPES
+
+from PIL import Image
+import cv2
+import obsws_python as obs
 
 from aiohttp import web, WSMsgType, WSCloseCode
 from aiohttp_session import setup as setup_session, get_session, new_session
@@ -74,7 +75,6 @@ l = logging.getLogger(__name__)
 # Can't store coroutines in sessions, directly; not even redis or memcached directories, so we store them in global memory, in this dict:
 g_twixt_work = {} # TODO: note, we 'del g_twixt_work[twixt_id]' and 'del session['twixt_id']' "as we go", but there's a real possibility of abandonment (as in, a page fails to fully load or to create the ws in its javascript, so the first ws_messages call never issues) -- so we should make a watchdog that cleans this out occasionally; thus, we'd need timestamps on the items within, as well
 
-g_announcement_id = 1
 
 #NOTE: we used to use hd.session['current_ac_id'] and ...'current_phrase'..., but we need all drivers to be on the same page; we actually need another concept, of a "current show" or something, to which all drivers are connected, so that a server can run more than one show simultaneously if wanted (maybe we need this?  It would be more of a centralized-server model, rather than a server-at-the-prjector-itself model....)
 g_current_ac_id = 0
@@ -262,7 +262,13 @@ async def watch(rq):
 	show_hidden = bool(rq.query.get('show_hidden', False))
 	cut_frame = bool(rq.query.get('cut_frame', False))
 	session = await get_session(rq)
-	session['config'] = {'show_hidden': show_hidden, 'cut_frame': cut_frame, 'font_size': 'large', 'flatten_phrases': False}
+	session['config'] = {
+		'show_hidden': show_hidden,
+		'cut_frame': cut_frame,
+		'font_size': 'large',
+		'font_format': 'halo',
+		'flatten_phrases': False,
+	}
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
 	return hr(html.watch(_origin(rq), _ws_url(rq), lp, show_hidden, cut_frame))
 
@@ -270,7 +276,13 @@ async def watch(rq):
 async def watch_captioned(rq):
 	#session = await get_session(rq)
 	session = await get_session(rq)
-	session['config'] = {'show_hidden': False, 'cut_frame': False, 'font_size': 'small', 'flatten_phrases': True}
+	session['config'] = {
+		'show_hidden': False,
+		'cut_frame': False,
+		'font_size': 'small',
+		'font_format': 'halo', #'outlined',
+		'flatten_phrases': True
+	}
 	lp = await _start_or_join_live_production(rq, rq.app['db'], int(rq.match_info['production_id']))
 	return hr(html.watch_captioned(_origin(rq), _ws_url(rq), lp))
 
@@ -392,7 +404,7 @@ async def ws(rq):
 		'edit': _ws_edit,
 		'add_watcher': _ws_add_watcher,
 		'add_driver': _ws_add_driver,
-		'fetch_new_announcement': _ws_fetch_new_announcement,
+		'next_auto_advance': _ws_next_auto_advance,
 	}
 	
 	hd = handler_data = U.Struct( # TODO: use @dataclass instead! (this code predated dataclasses in python!)
@@ -549,6 +561,15 @@ async def _set_new_live_phrase(hd, ac_id, phrase_id, exclude_self = True):
 		# ...and update all watchers with the first image in the set:
 		await _send_media_to_watchers(hd, g_current_rich_content_indeces[0].media_path.rstrip(k_thumb_appendix))
 
+	elif phrase.content_type == 3: # TODO: hardcode content_type!!! (3 == auto-advance, e.g., "announcements" movies)
+		txt = str(phrase.content[0]['content']) if phrase.content and len(phrase.content) >= 1 else ''
+		if not txt:
+			l.error('auto-advance content detected, but no content at all, to start with.')
+		if not txt.lower().endswith(('.jpg', '.mp4', '.mov', '.mkv')):
+			l.error('auto-advance content detected, but no media file - the only payload should be an mp4 (etc.) path.')
+		await _send_media_to_watchers(hd, f'/static/uploads/{ac_id}/{txt}', auto_advance_notify = 1)
+
+
 	else: #?TODO OR, make `phrase` something that can indeed be sent, in-tact, to watchers (and other drivers?!?) - think this just needs to biffurcate here
 		await _send_phrase_to_watchers(hd, ac_id, phrase)
 		await _send_new_live_phrase_id_to_drivers(hd, html.phrase_div_id(ac_id, phrase_id), exclude_self)
@@ -559,6 +580,7 @@ async def drive_forward(hd):
 	global g_current_rich_content_indeces
 	if len(g_current_rich_content_indeces) > 0:
 		g_current_rich_content_current_index = min(g_current_rich_content_current_index + 1, len(g_current_rich_content_indeces) - 1)
+		#"wrapping" version: g_current_rich_content_current_index = (g_current_rich_content_current_index + 1) % len(g_current_rich_content_indeces)
 		await _drive_x_update_all(hd, g_current_rich_content_indeces[g_current_rich_content_current_index], False)
 	else:
 		await _drive_x_phrase(hd, db.get_next_phrase)
@@ -636,12 +658,10 @@ async def _ws_drive(hd):
 			arrangement_id = int(hd.payload['arrangement_id'])
 			content = await _send_arrangement_content(hd, arrangement_id, 'drive_live_phrase', html._content_title)
 			await _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, content)
-			if not await _handle_announcements_arrangement(hd, arrangement_id):
-				# if the above returns false, then this is a "normal" arrangement, handle "normally":  TODO - this is kludgy; fix!
-				await _send_new_bg_to_watchers(hd, content.background)
-				#REMOVED the following two lines - don't really want to auto-load first phrase, after all; always let user do it manually; always start with "blank screen"
-				#if content.children and content.children[0].phrases:
-				#	await _send_phrase_to_watchers(hd, acid, content.children[0].phrases[0])
+			await _send_new_bg_to_watchers(hd, content.background)
+			#REMOVED the following two lines - don't really want to auto-load first phrase, after all; always let user do it manually; always start with "blank screen" (or, "background screen", more likely)
+			#if content.children and content.children[0].phrases:
+			#	await _send_phrase_to_watchers(hd, acid, content.children[0].phrases[0])
 		case 'select_blank':
 			await asyncio.gather(*[ws.send_json({'task': 'set_live_content_blank'}) for ws in hd.lpi.watchers.keys()])
 		case 'play_video':
@@ -691,28 +711,20 @@ async def _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, conten
 		'arrangement_content': content_div,
 	}) for ws in hd.lpi.drivers if ws != hd.ws])
 
-async def _send_media_to_watchers(hd, path, repeat = 0):
+async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0):
 	#OLD: image = origin + f"/static/images/{path}" and ... /videos/...
 	origin = _origin(hd.rq)
 	path = origin + path #'/static/uploads/{meta["acid"]}/' + path
 	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 	if path.lower().endswith(('.jpg', 'png', )): # TODO: KLUDGY... and add more image types?
-		await asyncio.gather(*[ws.send_json({'task': 'image', 'image': path}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
+		await asyncio.gather(*[ws.send_json({'task': 'image', 'image': path}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!  AND, TODO: auto_advance_notify!?
 	elif path.lower().endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
-		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': path, 'repeat': repeat}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
+		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': path, 'repeat': repeat, 'auto_advance_notify': auto_advance_notify}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
 
 async def _send_new_bg_to_watchers(hd, background):
 	if background: # no-op, otherwise
 		await _send_media_to_watchers(hd, '/static/uploads/bgs/' + background, repeat = 1)
 
-async def _handle_announcements_arrangement(hd, arrangement_id):
-	# Announcements TODO: kludgy!
-	if arrangement_id == 20: #TODO: remove HARDCODE!
-		await asyncio.gather(*[ws.send_json({'task': 'start_announcements'}) for ws in hd.lpi.watchers.keys()])
-		return True #TODO: kludgy!
-	else:
-		await asyncio.gather(*[ws.send_json({'task': 'stop_announcements'}) for ws in hd.lpi.watchers.keys()])
-		return False #TODO: kludgy!
 
 async def _ws_binary(hd, data):
 	assert data[0] == ord('!'), '"magic byte" ! needed to indicate this is a file upload (by convention)'
@@ -872,42 +884,11 @@ async def _send_production_content(hd, production_id, click_script, content_titl
 	arrangement_content_div = html.detail_nested_content(_origin(hd.rq), arrangement_content, click_script, content_titler, available_compositions)
 	await hd.ws.send_json({'task': 'set_production_and_arrangement_content', 'production_content': production_content_div, 'arrangement_content': arrangement_content_div})
 
-from os import listdir
-#_announcement_path = lambda num: f"images/announcements/s - {str(num).rjust(2, '0')}.jpg"
-_announcements = listdir('static/images/announcements')
-async def _ws_fetch_new_announcement(hd):
-	global g_announcement_id # TODO: use hd instead
-	url = _origin(hd.rq) + f'/static/images/announcements/{_announcements[g_announcement_id]}'
-	g_announcement_id += 1
-	g_announcement_id %= len(_announcements)
-	await asyncio.gather(*[ws.send_json({'task': 'next_announcement', 'url': url}) for ws in hd.lpi.watchers.keys()])
-	
+async def _ws_next_auto_advance(hd):
+	await drive_forward(hd)
 
-#_announcement_path = lambda num: f"images/announcements/s - {str(num).rjust(2, '0')}.jpg"
-#async def _ws_fetch_new_announcement(hd):
-#	global g_announcement_id # TODO: use hd instead
-#	path = _announcement_path(g_announcement_id)
-#	if not path_exists('static/' + path): # TODO: improve! use pathstuffs!
-#		g_announcement_id = 1 # start over
-#		path = _announcement_path(g_announcement_id)
-#	url = settings.k_static_url + path
-#	g_announcement_id += 1
-#	await asyncio.gather(*[ws.send_json({'task': 'next_announcement', 'url': url}) for ws in hd.lpi.watchers.keys()])
-	
 
-'''
-async def _ws_watch(hd):
-	watcher = asyncio.create_task(_relay_drive_actions(hd.ws))
-	asyncio.wait_for(watcher, None)
 
-async def _relay_drive_actions(ws):
-	# One of these is spun (via asyncio.create_task()) for each "watcher" client
-	while True:
-		#await g_drive_event.wait()
-		await ws.send_json({'task': 'set_live_content', 'content': g_live_content})
-'''
-
-# Etc.
 
 async def _set_up_common_get_post(request, dbc = True, uuid = True, data = True, re_log_in_seconds = None):
 	result = U.Struct(rq = request, session = await get_session(request))

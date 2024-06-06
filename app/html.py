@@ -90,8 +90,9 @@ def build_background_filter_result_content(origin, images, videos):
 
 
 def div_phrase(config, phrase):
-	font_div = 'content_large_font' if config['font_size'] == 'large' else 'content_small_font'
-	result = t.div(cls = f'halo_content vcenter {font_div}') if not config['show_hidden'] else t.div(cls = 'preformatted_content vcenter') # show as monospace+preformatted if we're showing chords
+	font_class = 'content_large_font' if config['font_size'] == 'large' else 'content_small_font'
+	format_class = 'halo_content' if config['font_format'] == 'halo' else 'outline_content'
+	result = t.div(cls = f'{format_class} vcenter {font_class}') if not config['show_hidden'] else t.div(cls = 'preformatted_content vcenter') # show as monospace+preformatted if we're showing chords
 	if phrase:
 		with result:
 			if config['flatten_phrases']:
