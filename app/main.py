@@ -261,10 +261,12 @@ async def drive(rq):
 async def watch(rq):
 	show_hidden = bool(rq.query.get('show_hidden', False))
 	cut_frame = bool(rq.query.get('cut_frame', False))
+	monitor = bool(rq.query.get('monitor', False))
 	session = await get_session(rq)
 	session['config'] = {
 		'show_hidden': show_hidden,
 		'cut_frame': cut_frame,
+		'monitor': monitor,
 		'font_size': 'large',
 		'font_format': 'halo',
 		'flatten_phrases': False,
@@ -279,6 +281,7 @@ async def watch_captioned(rq):
 	session['config'] = {
 		'show_hidden': False,
 		'cut_frame': False,
+		'monitor': False,
 		'font_size': 'small',
 		'font_format': 'halo', #'outlined',
 		'flatten_phrases': True
@@ -719,7 +722,15 @@ async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0)
 	if path.lower().endswith(('.jpg', 'png', )): # TODO: KLUDGY... and add more image types?
 		await asyncio.gather(*[ws.send_json({'task': 'image', 'image': path}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!  AND, TODO: auto_advance_notify!?
 	elif path.lower().endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
-		await asyncio.gather(*[ws.send_json({'task': 'video', 'video': path, 'repeat': repeat, 'auto_advance_notify': auto_advance_notify}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
+		await asyncio.gather(*[ws.send_json({
+			'task': 'video',
+			'video': path if not watcher.config['monitor'] else _monitor_version_of(path),
+			'repeat': repeat,
+			'auto_advance_notify': auto_advance_notify,
+		}) for ws, watcher in hd.lpi.watchers.items()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
+
+_monitor_version_of = lambda path: path[:path.rfind('.mp4')] + '-monitor.mp4'
+
 
 async def _send_new_bg_to_watchers(hd, background):
 	if background: # no-op, otherwise
