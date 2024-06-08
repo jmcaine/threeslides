@@ -288,7 +288,8 @@ function files_uploaded(path, names, thumbs, reply_type) {
 		if (reply_type == 'thumbnail') {
 			let range = g_quill_editor.getSelection();
 			if (range) {
-				g_quill_editor.insertText(range.index, '\n');
+				// these inserts result in an "upside-down" representation, since we keep using the same range.index
+				g_quill_editor.insertText(range.index, '\n' + names[i] + '\n\n');
 				g_quill_editor.insertEmbed(range.index, 'image', '/' + path + thumbs[i]); // leading / needed for embed ref
 				g_quill_editor.insertText(range.index, '\n');
 			} else { console.log("Error - somehow files_uploaded() was called when the cursor was not in the editor, so we don't know where to put the thumbnail image!"); }
