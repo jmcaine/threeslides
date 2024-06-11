@@ -36,7 +36,7 @@ ws.onmessage = function(event) {
 			break;
 		case "image":
 			if (!g_show_hidden) {
-				show_image(payload.image);
+				show_image(payload.image, payload.auto_advance_notify, payload.duration);
 			} // else, leave bg white (high-contrast)
 			break;
 		case "video":
@@ -125,10 +125,15 @@ function _flip_bg() {
 	g_next_bg = f;
 }
 
-function show_image(bg) {
+function show_image(image_url, auto_advance_notify, duration) {
 	remove_video();
-	g_next_bg.style.backgroundImage = "url('" + bg + "')";
+	g_next_bg.style.backgroundImage = "url('" + image_url + "')";
 	_flip_bg();
+	if (duration > 0) {
+		setTimeout(() => {
+			_send_next_auto_advance();
+		}, 1000 * duration);
+	}
 }
 
 function show_video(video, repeat, auto_advance_notify) {

@@ -565,13 +565,8 @@ async def _set_new_live_phrase(hd, ac_id, phrase_id, exclude_self = True):
 		await _send_media_to_watchers(hd, g_current_rich_content_indeces[0].media_path.rstrip(k_thumb_appendix))
 
 	elif phrase.content_type == 3: # TODO: hardcode content_type!!! (3 == auto-advance, e.g., "announcements" movies)
-		txt = str(phrase.content[0]['content']) if phrase.content and len(phrase.content) >= 1 else ''
-		if not txt:
-			l.error('auto-advance content detected, but no content at all, to start with.')
-		if not txt.lower().endswith(('.jpg', '.mp4', '.mov', '.mkv')):
-			l.error('auto-advance content detected, but no media file - the only payload should be an mp4 (etc.) path.')
-		await _send_media_to_watchers(hd, f'/static/uploads/{ac_id}/{txt}', auto_advance_notify = 1)
-
+		if not await _send_media_phrase_to_watchers(hd, ac_id, phrase, 1):
+			l.error('auto-advance content requested, but no content at all, or no media file (the only payload should be an mp4 (etc.) path).')
 
 	else: #?TODO OR, make `phrase` something that can indeed be sent, in-tact, to watchers (and other drivers?!?) - think this just needs to biffurcate here
 		await _send_phrase_to_watchers(hd, ac_id, phrase)
@@ -682,11 +677,21 @@ async def _ws_drive(hd):
 		case _:
 			l.error(f'''Action "{hd.payload['action']}" not recognized!''')
 
-async def _send_phrase_to_watchers(hd, ac_id, phrase):
+async def _send_media_phrase_to_watchers(hd, ac_id, phrase, auto_advance_notify):
 	txt = str(phrase.content[0]['content']) if phrase.content and len(phrase.content) >= 1 else ''
-	if txt.lower().endswith(('.jpg', '.mp4', '.mov', '.mkv')):
-		await _send_media_to_watchers(hd, f'/static/uploads/{ac_id}/{txt}')
-	else:
+	if txt and txt.lower().endswith(('.jpg', '.mp4', '.mov', '.mkv')):
+		duration = 0 # default - no auto-advance duration
+		if txt[2] == '*': # expected format 'dd*<filepath>' if txt[2] == * ... 'dd' is a two-digit "seconds" indicator
+			try: duration = int(txt[0:2]) # currently, this rather "overrides" auto_advance_notify - even if that's 0 or False, this results in an auto-advance situation
+			except: pass
+			txt = txt[3:] # remove prefix
+		await _send_media_to_watchers(hd, f'/static/uploads/{ac_id}/{txt}', auto_advance_notify = auto_advance_notify, duration = duration)
+		return True
+	return False
+
+async def _send_phrase_to_watchers(hd, ac_id, phrase):
+	if not await _send_media_phrase_to_watchers(hd, ac_id, phrase, 0):
+		# it's a regular phrase, not a media phrase, so...
 		sends = []
 		for ws, watcher in hd.lpi.watchers.items(): # TODO: separate "royal watchers" from plebians?
 			sends.append(ws.send_json({
@@ -714,19 +719,25 @@ async def _send_new_live_arrangement_to_other_drivers(hd, arrangement_id, conten
 		'arrangement_content': content_div,
 	}) for ws in hd.lpi.drivers if ws != hd.ws])
 
-async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0):
+async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0, duration = 0):
 	#OLD: image = origin + f"/static/images/{path}" and ... /videos/...
 	origin = _origin(hd.rq)
 	path = origin + path #'/static/uploads/{meta["acid"]}/' + path
 	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 	if path.lower().endswith(('.jpg', 'png', )): # TODO: KLUDGY... and add more image types?
-		await asyncio.gather(*[ws.send_json({'task': 'image', 'image': path}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!  AND, TODO: auto_advance_notify!?
+		await asyncio.gather(*[ws.send_json({
+			'task': 'image',
+			'image': path,
+			'auto_advance_notify': auto_advance_notify,
+			'duration': duration,
+		}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!  AND, TODO: auto_advance_notify!?
 	elif path.lower().endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
 		await asyncio.gather(*[ws.send_json({
 			'task': 'video',
 			'video': path if not watcher.config['monitor'] else _monitor_version_of(path),
 			'repeat': repeat,
 			'auto_advance_notify': auto_advance_notify,
+			'duration': duration, # TODO: currently this is ignored for movies - the entire movie length itself is just run; is this what we want?
 		}) for ws, watcher in hd.lpi.watchers.items()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
 
 _monitor_version_of = lambda path: path[:path.rfind('.mp4')] + '-monitor.mp4'

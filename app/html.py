@@ -545,7 +545,9 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 							end = min(len(start) + 30, min(txt.find('"},'), txt.find('\\n'))) # 30 chars or the first formatted bit or the first newline... whatever comes first
 							t.div(txt[len(start):end] + '...')
 						elif not txt.startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
-							if txt.lower().endswith('.jpg') or txt.lower().endswith('.mp4'):
+							if txt.lower().endswith(('.jpg', '.mp4', '.mov', '.mkv')):
+								if txt[2] == '*': # expected format 'dd*<filepath>' if txt[2] == * ... 'dd' is a two-digit "seconds" indicator
+									txt = txt[3:] # remove prefix
 								t.div(t.img(src = origin + f'/static/uploads/{composition_content.arrangement_composition_id}/{txt}{k_thumb_suffix}', width = 300))
 							else:
 								t.div(txt)
