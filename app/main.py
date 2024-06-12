@@ -262,11 +262,13 @@ async def watch(rq):
 	show_hidden = bool(rq.query.get('show_hidden', False))
 	cut_frame = bool(rq.query.get('cut_frame', False))
 	monitor = bool(rq.query.get('monitor', False))
+	primary = bool(rq.query.get('primary', False))
 	session = await get_session(rq)
 	session['config'] = {
 		'show_hidden': show_hidden,
 		'cut_frame': cut_frame,
 		'monitor': monitor,
+		'primary': primary,
 		'font_size': 'large',
 		'font_format': 'halo',
 		'flatten_phrases': False,
@@ -282,6 +284,7 @@ async def watch_captioned(rq):
 		'show_hidden': False,
 		'cut_frame': False,
 		'monitor': False,
+		'primary': False,
 		'font_size': 'small',
 		'font_format': 'halo', #'outlined',
 		'flatten_phrases': True
@@ -728,16 +731,16 @@ async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0,
 		await asyncio.gather(*[ws.send_json({
 			'task': 'image',
 			'image': path,
-			'auto_advance_notify': auto_advance_notify,
-			'duration': duration,
-		}) for ws in hd.lpi.watchers.keys()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!  AND, TODO: auto_advance_notify!?
+			'auto_advance_notify': auto_advance_notify if watcher.config['primary'] else 0,
+			'duration': duration if watcher.config['primary'] else 0,
+		}) for ws, watcher in hd.lpi.watchers.items()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!  AND, TODO: auto_advance_notify!?
 	elif path.lower().endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
 		await asyncio.gather(*[ws.send_json({
 			'task': 'video',
 			'video': path if not watcher.config['monitor'] else _monitor_version_of(path),
 			'repeat': repeat,
-			'auto_advance_notify': auto_advance_notify,
-			'duration': duration, # TODO: currently this is ignored for movies - the entire movie length itself is just run; is this what we want?
+			'auto_advance_notify': auto_advance_notify if watcher.config['primary'] else 0,
+			'duration': duration if watcher.config['primary'] else 0, # TODO: currently this is ignored for movies - the entire movie length itself is just run; is this what we want?
 		}) for ws, watcher in hd.lpi.watchers.items()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
 
 _monitor_version_of = lambda path: path[:path.rfind('.mp4')] + '-monitor.mp4'
