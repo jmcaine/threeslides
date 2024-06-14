@@ -18,6 +18,8 @@ var g_later_frame = null;
 var g_current_bg = null;
 var g_next_bg = null;
 
+var g_auto_advance_timeout = null;
+
 ws.onmessage = function(event) {
 	var payload = JSON.parse(event.data);
 	//console.log("payload.task = " + payload.task);
@@ -130,16 +132,29 @@ function show_image(image_url, auto_advance_notify, duration) {
 	g_next_bg.style.backgroundImage = "url('" + image_url + "')";
 	_flip_bg();
 	if (duration > 0) {
-		setTimeout(() => {
+		g_auto_advance_timeout = setTimeout(() => {
 			_send_next_auto_advance();
 		}, 1000 * duration);
 	}
+	else {
+		_clear_timeout();
+	}
 }
+
+function _clear_timeout() {
+	if (g_auto_advance_timeout != null) {
+		clearTimeout(g_auto_advance_timeout);
+		g_auto_advance_timeout = null;
+	}
+}
+
 
 function show_video(video, repeat, auto_advance_notify) {
 	// remove bg image:
 	g_next_bg.style.backgroundImage = "none";
 	_flip_bg();
+	// cancel any current auto-advance:
+	_clear_timeout();
 	// add the video:
 	vid = $('the_video');
 	vid.removeEventListener('ended', _send_next_auto_advance); // in case any are outstanding
