@@ -293,7 +293,7 @@ def edit_production_arrangements(ws_url, form, origin, production, arrangement_t
 				with t.div(cls = 'middle highlight_container', id = 'arrangement_content'):
 					_detail_nested_content(origin, first_arrangement_content, 'noop', _content_title_with_edits, available_compositions) # NOTE: we're sending an arrangement_content here, where a composition_content is actually asked for!  This turns out to work, because the two structs are so similar, but ought to think about fixing....  (can't simply send the first child (composition_content)!)
 			with t.div(cls = 'footer'):
-				t.div('Watch videos...', cls = 'buttonish footer_item', onclick = f'window.open("https://www.youtube.com/playlist?list=PLgDIhoudhZx_-txgbnFs6Iezqh8RW6d7S")')
+				t.div('Watch videos...', cls = 'buttonish footer_item', onclick = f'window.open("https://www.youtube.com/playlist?list=PLsLO93ERu2riD0wCXc39W1o_ISW6irn8Y")')
 
 	with d:
 		t.script(_js_ws(ws_url))
