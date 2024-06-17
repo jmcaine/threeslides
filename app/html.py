@@ -274,7 +274,7 @@ def testpell(origin, ws_url):
 	) for a in arrangements]
 '''
 def edit_production_arrangements(ws_url, form, origin, production, arrangement_titles, first_arrangement_content, available_compositions):
-	d = _doc(text.doc_prefix + f"Edit {production['name']}", origin, ('forms.css', 'quill.2.0.2.snow.css')) # 'jodit.min.css'
+	d = _doc(text.doc_prefix + f"Edit {production['name']}", origin, ('quill.2.0.2.snow.css', 'forms.css')) # 'jodit.min.css'
 	button = t.button('Edit', type = 'button', onclick = f"location.assign('/edit_production/{production['id']}')")
 	with d:
 		t.div(cls = 'gray_screen hide', id = 'gray_screen_div', onclick = 'hide_dialogs()') # invisible at first; for big_focus_box dialog-box, later..
@@ -548,7 +548,7 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 							if txt.lower().endswith(('.jpg', '.mp4', '.mov', '.mkv')):
 								if txt[2] == '*': # expected format 'dd*<filepath>' if txt[2] == * ... 'dd' is a two-digit "seconds" indicator
 									txt = txt[3:] # remove prefix
-								t.div(t.img(src = origin + f'/static/uploads/{composition_content.arrangement_composition_id}/{txt}{k_thumb_suffix}', width = 300))
+								t.div(t.img(src = origin + f'/static/uploads/{composition_content.arrangement_composition_id}/{txt}{k_thumb_suffix}?cache_bust={composition_content.cache_buster}', width = 300))
 							else:
 								t.div(txt)
 			t.hr()

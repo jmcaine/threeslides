@@ -91,11 +91,12 @@ async def get_production_arrangement_content(dbc, production_arrangement_id):
 	return await get_arrangement_content(dbc, (await fetchone(dbc, ('select arrangement from production_arrangements where id = ?', (production_arrangement_id,))))['arrangement'])
 
 async def get_composition_content(dbc, composition_id, arrangement_composition_id = None):
-	c = await fetchone(dbc, ('select composition.global, composition.content_type, title.title from composition join title on title.id = composition.title where composition.id = ?', (composition_id,)))
+	c = await fetchone(dbc, ('select composition.global, composition.content_type, composition.cache_buster, title.title from composition join title on title.id = composition.title where composition.id = ?', (composition_id,)))
 	return U.Struct(
 		arrangement_composition_id = arrangement_composition_id,
 		composition_id = composition_id,
 		content_type = c['content_type'],
+		cache_buster = c['cache_buster'],
 		title = c['title'],
 		globl = c['global'],
 		phrases = await _get_phrases(dbc, composition_id), # may be empty list []!
@@ -310,6 +311,7 @@ async def set_composition_content(dbc, arrangement_composition_id, title, phrase
 	# TODO: do this whole function as a transaction, which we can roll back if something goes wrong....
 	ac = await fetchone(dbc, ('select arrangement_composition.*, composition.title as title from arrangement_composition join composition on arrangement_composition.composition = composition.id where arrangement_composition.id = ?', (arrangement_composition_id,)))
 	composition_id = ac['composition']
+	await dbc.execute('update composition set cache_buster = cache_buster + 1 where id = ?', (composition_id,))
 	await dbc.execute('update title set title = ? where id = ?', (title, ac['title'])) # TODO: check result?!
 	await dbc.execute('delete from phrase where composition = ?', (composition_id,)) # TODO: just MARK as deleted, in DB, instead, to make for easy "undo"?!
 

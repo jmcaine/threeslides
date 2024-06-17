@@ -45,7 +45,7 @@ ws.onmessage = function(event) {
 };
 
 function init_quill() {
-	g_quill_editor = new Quill($('composition_rich_content_drive'), { modules: { toolbar: null, }, theme: 'snow', });
+	g_quill_editor = new Quill($('composition_rich_content_drive'), { modules: { toolbar: false, }, theme: 'snow', });
 	g_quill_editor.disable();
 
 	g_quill_editor.on('selection-change', (range, oldRange, source) => {
