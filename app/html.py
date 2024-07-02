@@ -16,6 +16,7 @@ from datetime import datetime
 from . import valid
 from . import settings
 from . import text
+from .shared import *
 
 k_thumb_suffix = ".small.jpg"
 
@@ -137,6 +138,7 @@ def drive(origin, ws_url, data):
 			with t.div(cls = 'header'):
 				t.div('CLEAR', cls = 'buttonish header_item', onclick = 'clear_watchers()')
 				t.div('EDIT SERVICE', cls = 'buttonish header_item', onclick = f"location.replace('/edit_production_arrangements/{data.production['id']}');")
+				t.div('♫', cls = 'buttonish header_item', title = 'start/stop background music', onclick = 'play_bg_music()')
 				t.div('►', cls = 'buttonish header_item', onclick = 'play_video()')
 				t.div('◄◄', cls = 'buttonish header_item', onclick = 'reset_video()')
 				t.div('■', cls = 'buttonish header_item', onclick = 'pause_video()')
@@ -545,7 +547,7 @@ def _detail_nested_content(origin, composition_content, click_script, content_ti
 							end = min(len(start) + 30, min(txt.find('"},'), txt.find('\\n'))) # 30 chars or the first formatted bit or the first newline... whatever comes first
 							t.div(txt[len(start):end] + '...')
 						elif not txt.startswith('['): # []ed text is "hidden", or special... see div_phrase(), which optionally shows it to watchers; it's also visible when you edit content, but not in normal "drive" or "(arrangement) edit" contexts served here...
-							if txt.lower().endswith(('.jpg', '.mp4', '.mov', '.mkv')):
+							if txt.lower().endswith(k_image_formats + k_video_formats):
 								if txt[2] == '*': # expected format 'dd*<filepath>' if txt[2] == * ... 'dd' is a two-digit "seconds" indicator
 									txt = txt[3:] # remove prefix
 								t.div(t.img(src = origin + f'/static/uploads/{composition_content.arrangement_composition_id}/{txt}{k_thumb_suffix}?cache_bust={composition_content.cache_buster}', width = 300))

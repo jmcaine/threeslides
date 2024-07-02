@@ -151,6 +151,9 @@ function update_live_rich_content_position(selection_idx) {
 	g_quill_editor.setSelection(selection_idx, 0, 'api');
 }
 
+function play_bg_music() {
+	ws_send({task: "drive", action: "play_bg_music"});
+}
 
 function play_video() {
 	ws_send({task: "drive", action: "play_video"});

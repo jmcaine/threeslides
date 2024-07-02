@@ -51,7 +51,9 @@ from . import exception
 from . import text
 from . import settings
 from . import util as U
+from .shared import *
 
+from . import pandora_player
 
 # Logging ---------------------------------------------------------------------
 
@@ -70,6 +72,7 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s : %(name)s:%(lineno)d 
 l = logging.getLogger(__name__)
 
 # Globals -----------------------------------------------------------------------
+
 
 #TODO!!: put ALL of this "global" stuff into app['key'] storage instead of leaving global like this!  see https://docs.aiohttp.org/en/stable/web_advanced.html#data-sharing-aka-no-singletons-please
 # Can't store coroutines in sessions, directly; not even redis or memcached directories, so we store them in global memory, in this dict:
@@ -640,6 +643,17 @@ async def _drive_x_phrase(hd, func):
 	# else, do NOTHING! (probably at the end of the line - last phrase in the composition)
 
 
+async def play_bg_music(hd):
+	if hd.rq.app['pandora_playing']:
+		hd.rq.app['pandora_playing'] = False
+		hd.rq.app['pandora_play'].clear()
+		hd.rq.app['pandora_stop'].set()
+	else:
+		l.debug('PANDORA --- starting via play_bg_music()')
+		hd.rq.app['pandora_playing'] = True
+		hd.rq.app['pandora_stop'].clear()
+		hd.rq.app['pandora_play'].set()
+
 
 async def _ws_drive(hd):
 	#TODO consider: from js: ws_send({task: "drive", action: "live", id: content_id});
@@ -665,6 +679,8 @@ async def _ws_drive(hd):
 			#	await _send_phrase_to_watchers(hd, acid, content.children[0].phrases[0])
 		case 'select_blank':
 			await asyncio.gather(*[ws.send_json({'task': 'set_live_content_blank'}) for ws in hd.lpi.watchers.keys()])
+		case 'play_bg_music':
+			await play_bg_music(hd)
 		case 'play_video':
 			await asyncio.gather(*[ws.send_json({'task': 'play_video'}) for ws in hd.lpi.watchers.keys()])
 		case 'pause_video':
@@ -682,7 +698,7 @@ async def _ws_drive(hd):
 
 async def _send_media_phrase_to_watchers(hd, ac_id, phrase, auto_advance_notify):
 	txt = str(phrase.content[0]['content']) if phrase.content and len(phrase.content) >= 1 else ''
-	if txt and txt.lower().endswith(('.jpg', '.mp4', '.mov', '.mkv')):
+	if txt and txt.lower().endswith(k_video_formats + k_audio_formats + k_image_formats):
 		duration = 0 # default - no auto-advance duration
 		if txt[2] == '*': # expected format 'dd*<filepath>' if txt[2] == * ... 'dd' is a two-digit "seconds" indicator
 			try: duration = int(txt[0:2]) # currently, this rather "overrides" auto_advance_notify - even if that's 0 or False, this results in an auto-advance situation
@@ -727,14 +743,14 @@ async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0,
 	origin = _origin(hd.rq)
 	path = origin + path #'/static/uploads/{meta["acid"]}/' + path
 	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
-	if path.lower().endswith(('.jpg', 'png', )): # TODO: KLUDGY... and add more image types?
+	if path.lower().endswith(k_image_formats):
 		await asyncio.gather(*[ws.send_json({
 			'task': 'image',
 			'image': path,
 			'auto_advance_notify': auto_advance_notify if watcher.config['primary'] else 0,
 			'duration': duration if watcher.config['primary'] else 0,
 		}) for ws, watcher in hd.lpi.watchers.items()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!  AND, TODO: auto_advance_notify!?
-	elif path.lower().endswith('.mp4'): # TODO KLUDGY (and, include .mov, etc.)
+	elif path.lower().endswith(k_video_formats + k_audio_formats):
 		await asyncio.gather(*[ws.send_json({
 			'task': 'video',
 			'video': path if not watcher.config['monitor'] else _monitor_version_of(path),
@@ -743,7 +759,7 @@ async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0,
 			'duration': duration if watcher.config['primary'] else 0, # TODO: currently this is ignored for movies - the entire movie length itself is just run; is this what we want?
 		}) for ws, watcher in hd.lpi.watchers.items()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!
 
-_monitor_version_of = lambda path: path[:path.rfind('.mp4')] + '-monitor.mp4'
+_monitor_version_of = lambda path: path[:path.rfind('.mp4')] + '-monitor.mp4' # TODO: handle others in k_video_formats!
 
 
 async def _send_new_bg_to_watchers(hd, background):
@@ -770,7 +786,7 @@ async def _ws_binary(hd, data):
 		names.append(name)
 		size = fil['size']
 		fp = path + name
-		if name.lower().endswith('.mp4'):
+		if name.lower().endswith(k_video_formats):
 			with open(fp, "wb") as file:
 				file.write(payload[pos:pos+size])
 			vid = cv2.VideoCapture(fp)
@@ -778,11 +794,16 @@ async def _ws_binary(hd, data):
 			result, image = vid.read()
 			assert result == True, "FAILED to capture frame!"
 			cv2.imwrite(fp + k_thumb_appendix, image)
-		else: #TODO: don't assume!  check for image extensions! (.jpg, .png...)
+		elif name.lower().endswith(k_image_formats):
 			img = Image.open(io.BytesIO(payload[pos:pos+size]))
 			img.save(fp)
 			img.thumbnail((300, 300)) # modifies img in-place
 			img.save(fp + k_thumb_appendix)
+		elif name.lower().endswith(k_audio_formats):
+			with open(fp, "wb") as file:
+				file.write(payload[pos:pos+size])
+		else:
+			l.error(f'upload of file {name} FAILED - is not in set of video formats ({k_video_formats}) or image formats ({k_image_formats}) or audio formats ({k_audio_formats})!')
 		thumbs.append(name + k_thumb_appendix)
 		pos += size
 
@@ -865,7 +886,6 @@ async def _set_composition_content(hd, acid):
 	phrases = []
 	content_lines = []
 	for line in text.strip().splitlines():
-		# Look for .jpg lines that might indicate a need for thumbnail-creation:
 		stripped_line = line.strip()
 		if not stripped_line: # if blank line...
 			if content_lines: # multiple blank lines should be ignored, rather than creating extra (empty) phrases
@@ -948,7 +968,18 @@ async def _set_up_common_post(request, dbc = True, uuid = True, data = True, re_
 async def _init(app):
 	await _init_db(app)
 	_init_obs(app, 3)
+
 	app['lps'] = {}
+
+async def _shutdown(app):
+	l.info('Shutting down...')
+	if 'db' in app:
+		await app['db'].close()
+	for lpi, lp in app['lps'].items():
+		for ws in lp.watchers.keys():
+			await ws.close()
+	l.info('...shutdown complete')
+
 
 async def _init_db(app):
 	l.info('Initializing database...')
@@ -975,14 +1006,47 @@ def _init_obs(app, timeout):
 			l.info('... FAILED to connect to OBS. (Note: connection not required if OBS integration is not desired.)')
 
 	
-async def _shutdown(app):
-	l.info('Shutting down...')
-	if 'db' in app:
-		await app['db'].close()
-	for lpi, lp in app['lps'].items():
-		for ws in lp.watchers.keys():
-			await ws.close()
-	l.info('...shutdown complete')
+def _init_pandora(app):
+	l.info('Initializing Pandora...')
+	app['pandora_playing'] = False
+	app['pandora_play'] = asyncio.Event()
+	app['pandora_stop'] = asyncio.Event()
+	app.cleanup_ctx.append(_background_tasks)
+	l.info('...Pandora initialized')
+
+async def _pandora_stop_wait(app):
+	await app['pandora_stop'].wait()
+
+async def _pandora_task_coro(app):
+	while True:
+		try:
+			l.debug('PANDORA: waiting start event...')
+			await app['pandora_play'].wait()
+			l.debug('PANDORA: GOT start event...')
+			pandora_player.start()
+
+			while True:
+				try:
+					l.debug('PANDORA: playing next song...')
+					duration = pandora_player.play_next()
+					await asyncio.wait_for(_pandora_stop_wait(app), timeout = duration) # wait for a cancellation event OR for the song to finish
+					l.debug('PANDORA: got STOP event before finished playing song.')
+					pandora_player.stop()
+					break # break out of this inner loop, back to outer loop where we listen for a new start event.
+				except TimeoutError:
+					l.debug('PANDORA: song finished, going on to next...')
+
+		except asyncio.CancelledError:
+			l.info('PANDORA shut down')
+			break
+
+async def _background_tasks(app):
+	l.debug('FIRING _background_tasks')
+	app['pandora_task'] = asyncio.create_task(_pandora_task_coro(app))
+	yield
+	app['pandora_task'].cancel()
+	await app['pandora_task']
+
 
 
 # Run server like so, from cli:
@@ -995,6 +1059,7 @@ async def _shutdown(app):
 #		adev runserver --app-factory init --livereload --debug-toolbar test1_app
 def init(argv):
 	app = web.Application()
+	_init_pandora(app) # This apparently needs to be done here, not later in _init(app) hook/handler
 
 	# Set up sessions:
 	fernet_key = fernet.Fernet.generate_key()
@@ -1008,7 +1073,7 @@ def init(argv):
 
 	# Add standard routes:
 	app.add_routes(rt)
-	
+
 	# Add startup/shutdown hooks:
 	app.on_startup.append(_init)
 	app.on_shutdown.append(_shutdown)
@@ -1019,14 +1084,12 @@ def init(argv):
 def app():
 	return init(None)
 
-
 if __name__ == '__main__':
 	import argparse
 	parser = argparse.ArgumentParser(description="aiohttp server example")
 	parser.add_argument('--path')
 
 	app = app()
-	# configure app
 
 	args = parser.parse_args()
 	web.run_app(app, path=args.path)#, port=args.port)
