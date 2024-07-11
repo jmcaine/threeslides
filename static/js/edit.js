@@ -290,7 +290,7 @@ function files_uploaded(path, names, thumbs, reply_type) {
 			if (range) {
 				// these inserts result in an "upside-down" representation, since we keep using the same range.index
 				g_quill_editor.insertText(range.index, '\n' + names[i] + '\n\n');
-				g_quill_editor.insertEmbed(range.index, 'image', '/' + path + thumbs[i]); // leading / needed for embed ref
+				g_quill_editor.insertEmbed(range.index, 'image', '/' + path + thumbs[i] + '?cache_bust=' + (1000 + Math.floor(Math.random() * 8999)).toString()); // leading / needed for embed ref
 				g_quill_editor.insertText(range.index, '\n');
 			} else { console.log("Error - somehow files_uploaded() was called when the cursor was not in the editor, so we don't know where to put the thumbnail image!"); }
 		} else {

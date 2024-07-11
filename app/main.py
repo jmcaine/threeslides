@@ -616,7 +616,8 @@ async def drive_selection(hd):
 async def _drive_x_update_all(hd, rich_content_index, exclude_self = True):
 	exclusion = ws != hd.ws if exclude_self else True
 	# Send update to watchers:
-	await _send_media_to_watchers(hd, rich_content_index.media_path.rstrip(k_thumb_appendix))
+	filepath = re.sub(fr'{k_thumb_appendix}\?cache_bust=[0-9][0-9][0-9][0-9]', '', rich_content_index.media_path)
+	await _send_media_to_watchers(hd, filepath)
 	# Update drivers' positions:
 	await asyncio.gather(*[ws.send_json({
 		'task': 'update_live_rich_content_position',
@@ -632,7 +633,8 @@ async def _drive_x_update_all(hd, rich_content_index, exclude_self = True):
 				if i == 1:
 					l.error('OBS connect failed to re-initialize after a failed call to set_current_program_scene()... giving up for now.')
 				#else, the first time 'round, try re-initializing:
-				_init_obs(hd.rq.app, 0.8) # and then loop back and try again
+				_init_obs(hd.rq.app, 1.2) # and then loop back and try again
+				# TODO: this is bad in the case where OBS is not in the picture at all, because a fail could take over a second, and this would delay EVERY drive request!
 
 async def _drive_x_phrase(hd, func):
 	global g_current_ac_id
