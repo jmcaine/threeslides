@@ -414,6 +414,7 @@ async def ws(rq):
 		'add_watcher': _ws_add_watcher,
 		'add_driver': _ws_add_driver,
 		'next_auto_advance': _ws_next_auto_advance,
+		'reload_all_watchers': _ws_reload_all_watchers,
 	}
 	
 	hd = handler_data = U.Struct( # TODO: use @dataclass instead! (this code predated dataclasses in python!)
@@ -934,7 +935,9 @@ async def _send_production_content(hd, production_id, click_script, content_titl
 async def _ws_next_auto_advance(hd):
 	await drive_forward(hd)
 
-
+async def _ws_reload_all_watchers(hd):
+	for lpi, lp in hd.rq.app['lps'].items():
+		await asyncio.gather(*[ws.send_json({'task': 'reload'}) for ws in lp.watchers.keys()])
 
 
 async def _set_up_common_get_post(request, dbc = True, uuid = True, data = True, re_log_in_seconds = None):

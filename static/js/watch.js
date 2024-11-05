@@ -69,6 +69,8 @@ ws.onmessage = function(event) {
 		case "set_live_content_blank":
 			set_live_content(1, "", 0); // TODO: fix hardcodes!
 			break;
+		case "reload":
+			reload();
 		case "pong":
 			// good! TODO: do something about this(?), even though there's nothing more to do to complete the loop (we'll send the next ping according to a timer (below); no need to "send" anything now, in reply)
 			break;
@@ -251,3 +253,7 @@ function set_live_content(display_scheme, content, bg) {
 	*/
 };
 
+
+function reload() {
+	location.reload(true);
+}

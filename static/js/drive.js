@@ -169,3 +169,6 @@ function select_blank(_div_id, _phrase_id) { // unused div_id and phrase_id, but
 	ws_send({task: "drive", action: "select_blank"});
 }
 
+function reload_all_watchers() {
+	ws_send({task: "reload_all_watchers"});
+}

@@ -5,7 +5,7 @@ __license__ = 'MIT'
 
 from . import util as U
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import logging
 l = logging.getLogger(__name__)
@@ -132,7 +132,7 @@ async def get_production_arrangement_titles(dbc, production_id):
 	
 
 async def _fetch_nearest_production_id(dbc):
-	p = await fetchone(dbc, ("select id from production order by abs(strftime('%s', production.scheduled) - strftime('%s', ?)) limit 1", (datetime.now().isoformat(),)))
+	p = await fetchone(dbc, ("select id from production where production.scheduled >= ? order by strftime('%s', production.scheduled) limit 1", ((datetime.now() - timedelta(hours = 3)).isoformat(),)))
 	return p['id']
 	
 	
