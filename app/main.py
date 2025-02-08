@@ -796,7 +796,7 @@ async def _ws_binary(hd, data):
 			vid.set(cv2.CAP_PROP_POS_FRAMES, int(vid.get(cv2.CAP_PROP_FRAME_COUNT)) / 2) # get thumbnail from half-way frame (because the first umpteen are often black, in a fade-from-black)
 			result, image = vid.read()
 			assert result == True, "FAILED to capture frame!"
-			thumb = cv2.resize(image, (k_thumbnail_size, int(k_thumbnail_size * 10 / 16)))
+			thumb = cv2.resize(image, (k_thumbnail_size, k_thumbnail_size * 10 // 16))
 			cv2.imwrite(fp + k_thumb_appendix, thumb)
 		elif name.lower().endswith(k_image_formats):
 			img = Image.open(io.BytesIO(payload[pos:pos+size]))
