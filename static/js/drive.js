@@ -155,6 +155,10 @@ function play_bg_music() {
 	ws_send({task: "drive", action: "play_bg_music"});
 }
 
+function play_bg_skip() {
+	ws_send({task: "drive", action: "play_bg_skip"});
+}
+
 function play_video() {
 	ws_send({task: "drive", action: "play_video"});
 }
