@@ -11,6 +11,7 @@ import json
 import logging
 import pathlib
 import re
+import socket
 import time
 import traceback
 
@@ -30,7 +31,7 @@ from sqlite3 import PARSE_DECLTYPES
 
 from PIL import Image
 import cv2
-import obsws_python as obs
+
 
 from aiohttp import web, WSMsgType, WSCloseCode
 from aiohttp_session import setup as setup_session, get_session, new_session
@@ -53,7 +54,6 @@ from . import settings
 from . import util as U
 from .shared import *
 
-from . import pandora_player
 
 # Logging ---------------------------------------------------------------------
 
@@ -72,6 +72,9 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s : %(name)s:%(lineno)d 
 l = logging.getLogger(__name__)
 
 # Globals -----------------------------------------------------------------------
+
+utfencode = lambda st: st.encode('utf-8')
+utfdecode = lambda st: st.decode('utf-8')
 
 
 #TODO!!: put ALL of this "global" stuff into app['key'] storage instead of leaving global like this!  see https://docs.aiohttp.org/en/stable/web_advanced.html#data-sharing-aka-no-singletons-please
@@ -399,6 +402,42 @@ class Create_Arrangement(web.View):
 
 # ----------------------------------------------------------------
 
+async def _ws_aux_handler(rq, if_collection_name):
+	ws = None
+	try:
+		ws = web.WebSocketResponse()
+		await ws.prepare(rq)
+		l.info(f'Adding an interface to {if_collection_name}...')
+		rq.app[if_collection_name].append(ws)
+		try:
+			async for msg in ws:
+				if msg.type == WSMsgType.TEXT:
+					pass # we don't actually expect any messages yet; we just send them
+					#payload = json.loads(msg.data)
+				elif msg.type == WSMsgType.ERROR:
+					raise ws.exception()
+		except Exception as e:
+			l.error(traceback.format_exc())
+			l.error(f'Exception processing messages for {if_collection_name}; shutting down this interface...')
+		finally:
+			rq.app[if_collection_name].remove(ws)
+	except:
+		l.error(traceback.format_exc())
+	return ws
+
+@rt.get('/ws_obs')
+async def ws_obs(rq):
+	return await _ws_aux_handler(rq, 'obs_ifs')
+
+@rt.get('/ws_xair')
+async def ws_xair(rq):
+	return await _ws_aux_handler(rq, 'xair_ifs')
+
+@rt.get('/ws_bg_music')
+async def ws_bg_music(rq):
+	return await _ws_aux_handler(rq, 'bg_music_ifs')
+
+
 @rt.get('/ws')
 async def ws(rq):
 	ws = web.WebSocketResponse()
@@ -625,17 +664,8 @@ async def _drive_x_update_all(hd, rich_content_index, exclude_self = True):
 		'selection_idx': rich_content_index.scroll_to_index,
 	}) for ws in hd.lpi.drivers if exclusion])
 	# And move to designated camera/obs scene:
-	if settings.obs:
-		for i in range(2): # if fails the first time, try again after a re-connect attempt:
-			try:
-				hd.rq.app['obsif'].set_current_program_scene(settings.obs_scene)
-				break
-			except:
-				if i == 1:
-					l.error('OBS connect failed to re-initialize after a failed call to set_current_program_scene()... giving up for now.')
-				#else, the first time 'round, try re-initializing:
-				_init_obs(hd.rq.app, 1.2) # and then loop back and try again
-				# TODO: this is bad in the case where OBS is not in the picture at all, because a fail could take over a second, and this would delay EVERY drive request!
+	await asyncio.gather(*[ws.send_str('slide_scene') for ws in hd.rq.app['obs_ifs']])
+
 
 async def _drive_x_phrase(hd, func):
 	global g_current_ac_id
@@ -647,15 +677,16 @@ async def _drive_x_phrase(hd, func):
 
 
 async def play_bg_music(hd):
-	if hd.rq.app['pandora_playing']:
-		hd.rq.app['pandora_playing'] = False
-		hd.rq.app['pandora_play'].clear()
-		hd.rq.app['pandora_stop'].set()
+	if hd.rq.app['bg_music_playing']:
+		hd.rq.app['bg_music_playing'] = False
+		await asyncio.gather(*[ws.send_str('stop') for ws in hd.rq.app['bg_music_ifs']])
 	else:
-		l.debug('PANDORA --- starting via play_bg_music()')
-		hd.rq.app['pandora_playing'] = True
-		hd.rq.app['pandora_stop'].clear()
-		hd.rq.app['pandora_play'].set()
+		hd.rq.app['bg_music_playing'] = True
+		await asyncio.gather(*[ws.send_str('play') for ws in hd.rq.app['bg_music_ifs']])
+
+async def play_bg_skip(hd):
+	if hd.rq.app['bg_music_playing']:
+		await asyncio.gather(*[ws.send_str('skip') for ws in hd.rq.app['bg_music_ifs']])
 
 
 async def _ws_drive(hd):
@@ -684,6 +715,8 @@ async def _ws_drive(hd):
 			await asyncio.gather(*[ws.send_json({'task': 'set_live_content_blank'}) for ws in hd.lpi.watchers.keys()])
 		case 'play_bg_music':
 			await play_bg_music(hd)
+		case 'play_bg_skip':
+			await play_bg_skip(hd)
 		case 'play_video':
 			await asyncio.gather(*[ws.send_json({'task': 'play_video'}) for ws in hd.lpi.watchers.keys()])
 		case 'pause_video':
@@ -747,6 +780,7 @@ async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0,
 	path = origin + path #'/static/uploads/{meta["acid"]}/' + path
 	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 	if path.lower().endswith(k_image_formats):
+		await asyncio.gather(*[ws.send_str('mute_dp') for ws in hd.rq.app['xair_ifs']]) # a little overkill, to mute every slide, but knowing when a video has finished playing on the device that needs its channel muted at the end is also a little complicated....
 		await asyncio.gather(*[ws.send_json({
 			'task': 'image',
 			'image': path,
@@ -754,6 +788,7 @@ async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0,
 			'duration': duration if watcher.config['primary'] else 0,
 		}) for ws, watcher in hd.lpi.watchers.items()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!  AND, TODO: auto_advance_notify!?
 	elif path.lower().endswith(k_video_formats + k_audio_formats):
+		await asyncio.gather(*[ws.send_str('unmute_dp') for ws in hd.rq.app['xair_ifs']])
 		await asyncio.gather(*[ws.send_json({
 			'task': 'video',
 			'video': path if not watcher.config['monitor'] else _monitor_version_of(path),
@@ -799,7 +834,7 @@ async def _ws_binary(hd, data):
 			thumb = cv2.resize(image, (k_thumbnail_size, k_thumbnail_size * 10 // 16))
 			cv2.imwrite(fp + k_thumb_appendix, thumb)
 		elif name.lower().endswith(k_image_formats):
-			img = Image.open(io.BytesIO(payload[pos:pos+size]))
+			img = Image.open(io.BytesIO(payload[pos:pos+size])).convert("RGB")
 			img.save(fp)
 			img.thumbnail((k_thumbnail_size, k_thumbnail_size)) # modifies img in-place
 			img.save(fp + k_thumb_appendix)
@@ -973,7 +1008,10 @@ async def _set_up_common_post(request, dbc = True, uuid = True, data = True, re_
 
 async def _init(app):
 	await _init_db(app)
-	_init_obs(app, 3)
+	app['obs_ifs'] = [] #await asyncio.gather(*[ws.send_str('slide_scene') for ws in hd.rq.app['obs_ifs']])
+	app['xair_ifs'] = [] #await asyncio.gather(*[ws.send_str('unmute_dp') for ws in hd.rq.app['xair_ifs']])
+	app['bg_music_ifs'] = [] #await asyncio.gather(*[ws.send_str('play') for ws in hd.rq.app['bg_music_ifs']])
+	app['bg_music_playing'] = False
 
 	app['lps'] = {}
 
@@ -1001,59 +1039,6 @@ async def _init_db(app):
 
 	l.info('...database initialized')
 
-def _init_obs(app, timeout):
-	app['obsif'] = None
-	if settings.obs:
-		l.info(f'Initializing OBS connection (trying for {timeout} seconds)...')
-		try:
-			app['obsif'] = obs.ReqClient(host = settings.obs_host, port = settings.obs_port, password = settings.obs_password, timeout = timeout)
-			l.info('...OBS connection initialized')
-		except:
-			l.info('... FAILED to connect to OBS. (Note: connection not required if OBS integration is not desired.)')
-
-	
-def _init_pandora(app):
-	l.info('Initializing Pandora...')
-	app['pandora_playing'] = False
-	app['pandora_play'] = asyncio.Event()
-	app['pandora_stop'] = asyncio.Event()
-	app.cleanup_ctx.append(_background_tasks)
-	l.info('...Pandora initialized')
-
-async def _pandora_stop_wait(app):
-	await app['pandora_stop'].wait()
-
-async def _pandora_task_coro(app):
-	while True:
-		try:
-			l.debug('PANDORA: waiting start event...')
-			await app['pandora_play'].wait()
-			l.debug('PANDORA: GOT start event...')
-			pandora_player.start()
-
-			while True:
-				try:
-					l.debug('PANDORA: playing next song...')
-					duration = pandora_player.play_next()
-					await asyncio.wait_for(_pandora_stop_wait(app), timeout = duration) # wait for a cancellation event OR for the song to finish
-					l.debug('PANDORA: got STOP event before finished playing song.')
-					pandora_player.stop()
-					break # break out of this inner loop, back to outer loop where we listen for a new start event.
-				except TimeoutError:
-					l.debug('PANDORA: song finished, going on to next...')
-
-		except asyncio.CancelledError:
-			l.info('PANDORA shut down')
-			break
-
-async def _background_tasks(app):
-	l.debug('FIRING _background_tasks')
-	app['pandora_task'] = asyncio.create_task(_pandora_task_coro(app))
-	yield
-	app['pandora_task'].cancel()
-	await app['pandora_task']
-
-
 
 # Run server like so, from cli:
 #		python -m aiohttp.web -H localhost -P 8080 main:init
@@ -1065,7 +1050,6 @@ async def _background_tasks(app):
 #		adev runserver --app-factory init --livereload --debug-toolbar test1_app
 def init(argv):
 	app = web.Application()
-	_init_pandora(app) # This apparently needs to be done here, not later in _init(app) hook/handler
 
 	# Set up sessions:
 	fernet_key = fernet.Fernet.generate_key()
