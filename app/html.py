@@ -139,6 +139,7 @@ def drive(origin, ws_url, data):
 				t.div('CLEAR', cls = 'buttonish header_item', onclick = 'clear_watchers()')
 				t.div('EDIT SERVICE', cls = 'buttonish header_item', onclick = f"location.replace('/edit_production_arrangements/{data.production['id']}');")
 				t.div('∞', cls = 'buttonish header_item', title = 'reload all watchers', onclick = 'reload_all_watchers()')
+				t.div('♫>', cls = 'buttonish header_item', title = 'skip song (background music)', onclick = 'play_bg_skip()')
 				t.div('♫', cls = 'buttonish header_item', title = 'start/stop background music', onclick = 'play_bg_music()')
 				t.div('►', cls = 'buttonish header_item', onclick = 'play_video()')
 				t.div('◄◄', cls = 'buttonish header_item', onclick = 'reset_video()')
