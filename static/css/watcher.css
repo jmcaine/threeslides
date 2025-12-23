@@ -21,9 +21,11 @@ html, body {
 }
 
 .bg_frame {
-	background-size: auto 100%;
+	/*background-size: auto 100%;*/
+	background-size: contain;
 	background-repeat: no-repeat;
-	background-position: center center;
+	/*background-position: center center; */
+	background-position: top center;
 	/*transition: background-image 1.0s linear;*/
 }
 

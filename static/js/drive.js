@@ -155,6 +155,10 @@ function play_bg_music() {
 	ws_send({task: "drive", action: "play_bg_music"});
 }
 
+function restore_lights() {
+	ws_send({task: "drive", action: "restore_lights"});
+}
+
 function play_bg_skip() {
 	ws_send({task: "drive", action: "play_bg_skip"});
 }

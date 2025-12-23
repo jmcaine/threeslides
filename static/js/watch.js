@@ -134,6 +134,7 @@ function show_image(image_url, auto_advance_notify, duration) {
 	g_next_bg.style.backgroundImage = "url('" + image_url + "')";
 	_flip_bg();
 	if (duration > 0) {
+		_clear_timeout();
 		g_auto_advance_timeout = setTimeout(() => {
 			_send_next_auto_advance();
 		}, 1000 * duration);

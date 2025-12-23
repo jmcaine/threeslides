@@ -28,17 +28,21 @@ def start():
 	playlist = station.get_playlist()
 	l.debug(f'PANDORA --- got playlist')
 
-
+import traceback
 def play_next():
 	song = next(playlist)
-	#l.debug(f'PANDORA --- song: {song.song_name}, url: {song.audio_url}')
-	song.prepare_playback()
-	global media
-	media = vlc.MediaPlayer(song.audio_url)
-	duration = song.track_length #media.get_length()
-	media.play()
-	return duration
-
+	l.debug(f'PANDORA --- song: {song.song_name}, url: {song.audio_url}')
+	try:
+		song.prepare_playback()
+		global media
+		media = vlc.MediaPlayer(song.audio_url)
+		duration = song.track_length #media.get_length()
+		l.debug(f'PANDORA --- duration: {duration}')
+		media.play()
+		l.debug(f'PANDORA --- started playback')
+		return duration
+	except:
+		l.error(traceback.format_exc())
 
 def stop():
 	global media

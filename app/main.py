@@ -437,6 +437,9 @@ async def ws_xair(rq):
 async def ws_bg_music(rq):
 	return await _ws_aux_handler(rq, 'bg_music_ifs')
 
+@rt.get('/ws_qlc')
+async def ws_qlc(rq):
+	return await _ws_aux_handler(rq, 'qlc_ifs')
 
 @rt.get('/ws')
 async def ws(rq):
@@ -789,6 +792,8 @@ async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0,
 		}) for ws, watcher in hd.lpi.watchers.items()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!  AND, TODO: auto_advance_notify!?
 	elif path.lower().endswith(k_video_formats + k_audio_formats):
 		await asyncio.gather(*[ws.send_str('unmute_dp') for ws in hd.rq.app['xair_ifs']])
+		if 'Ann' in path:
+			await asyncio.gather(*[ws.send_str('blackout') for ws in hd.rq.app['qlc_ifs']])
 		await asyncio.gather(*[ws.send_json({
 			'task': 'video',
 			'video': path if not watcher.config['monitor'] else _monitor_version_of(path),
@@ -1011,6 +1016,7 @@ async def _init(app):
 	app['obs_ifs'] = [] #await asyncio.gather(*[ws.send_str('slide_scene') for ws in hd.rq.app['obs_ifs']])
 	app['xair_ifs'] = [] #await asyncio.gather(*[ws.send_str('unmute_dp') for ws in hd.rq.app['xair_ifs']])
 	app['bg_music_ifs'] = [] #await asyncio.gather(*[ws.send_str('play') for ws in hd.rq.app['bg_music_ifs']])
+	app['qlc_ifs'] = []
 	app['bg_music_playing'] = False
 
 	app['lps'] = {}

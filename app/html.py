@@ -141,6 +141,7 @@ def drive(origin, ws_url, data):
 				t.div('∞', cls = 'buttonish header_item', title = 'reload all watchers', onclick = 'reload_all_watchers()')
 				t.div('♫>', cls = 'buttonish header_item', title = 'skip song (background music)', onclick = 'play_bg_skip()')
 				t.div('♫', cls = 'buttonish header_item', title = 'start/stop background music', onclick = 'play_bg_music()')
+				t.div(' ', cls = 'buttonish header_item', title = 'lights ON', onclick = 'restore_lights()')
 				t.div('►', cls = 'buttonish header_item', onclick = 'play_video()')
 				t.div('◄◄', cls = 'buttonish header_item', onclick = 'reset_video()')
 				t.div('■', cls = 'buttonish header_item', onclick = 'pause_video()')
