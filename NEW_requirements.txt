@@ -1,0 +1,4 @@
+sort of.
+
+Just
+pip install aiohttp aiohttp-session aiosignal aiosqlite cryptography dominate multidict Pillow opencv-python
