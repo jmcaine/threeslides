@@ -178,7 +178,8 @@ def watch_captioned(origin, ws_url, data):
 			# BG frames - frames below are transparent-backgrounded, so they could display on top of this.
 			t.div(id = 'bg_front_frame', cls = 'full_frame bg_frame')
 			t.div(id = 'bg_back_frame', cls = 'full_frame bg_frame')
-			t.video(id = 'the_video', cls = 'hide', width = '100%')
+			t.video(id = 'main_video', cls = 'hide', width = '100%')
+			t.audio(id = 'main_mp3', cls = 'hide')
 			with t.div(cls = 'full_frame'):
 				t.div(id = 'main_front_frame', cls = 'vcenter_content')
 				t.div(id = 'main_back_frame', cls = 'vcenter_content')
@@ -206,7 +207,8 @@ def watch(origin, ws_url, data, show_hidden, cut_frame):
 			# BG frames - frames below are transparent-backgrounded, so they could display on top of this.
 			t.div(id = 'bg_front_frame', cls = 'full_frame bg_frame')
 			t.div(id = 'bg_back_frame', cls = 'full_frame bg_frame')
-			t.video(id = 'the_video', cls = 'hide', width = '100%')
+			t.video(id = 'main_video', cls = 'hide', width = '100%')
+			t.audio(id = 'main_mp3', cls = 'hide')
 			with t.div(cls = 'full_frame'):
 				t.div(id = 'main_front_frame', cls = 'vcenter_content')
 				t.div(id = 'main_back_frame', cls = 'vcenter_content')

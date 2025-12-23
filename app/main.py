@@ -405,7 +405,7 @@ class Create_Arrangement(web.View):
 async def _ws_aux_handler(rq, if_collection_name):
 	ws = None
 	try:
-		ws = web.WebSocketResponse()
+		ws = web.WebSocketResponse() # web.WebSocketResponse(max_msg_size = 1024 * 1024 * 500) # does this do anything?  Think the main max-out problem is treated in nginx or supervisor setup
 		await ws.prepare(rq)
 		l.info(f'Adding an interface to {if_collection_name}...')
 		rq.app[if_collection_name].append(ws)
@@ -680,17 +680,13 @@ async def _drive_x_phrase(hd, func):
 
 
 async def play_bg_music(hd):
-	if hd.rq.app['bg_music_playing']:
-		hd.rq.app['bg_music_playing'] = False
-		await asyncio.gather(*[ws.send_str('stop') for ws in hd.rq.app['bg_music_ifs']])
-	else:
-		hd.rq.app['bg_music_playing'] = True
-		await asyncio.gather(*[ws.send_str('play') for ws in hd.rq.app['bg_music_ifs']])
+	await asyncio.gather(*[ws.send_str('startstop') for ws in hd.rq.app['bg_music_ifs']])
 
 async def play_bg_skip(hd):
-	if hd.rq.app['bg_music_playing']:
-		await asyncio.gather(*[ws.send_str('skip') for ws in hd.rq.app['bg_music_ifs']])
+	await asyncio.gather(*[ws.send_str('skip') for ws in hd.rq.app['bg_music_ifs']])
 
+async def restore_lights(hd):
+	await asyncio.gather(*[ws.send_str('restore') for ws in hd.rq.app['qlc_ifs']])
 
 async def _ws_drive(hd):
 	#TODO consider: from js: ws_send({task: "drive", action: "live", id: content_id});
@@ -732,6 +728,8 @@ async def _ws_drive(hd):
 			await drive_back(hd)
 		case 'selection':
 			await drive_selection(hd)
+		case 'restore_lights':
+			await restore_lights(hd)
 		case _:
 			l.error(f'''Action "{hd.payload['action']}" not recognized!''')
 
@@ -781,8 +779,8 @@ async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0,
 	#OLD: image = origin + f"/static/images/{path}" and ... /videos/...
 	origin = _origin(hd.rq)
 	path = origin + path #'/static/uploads/{meta["acid"]}/' + path
-	await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 	if path.lower().endswith(k_image_formats):
+		await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		await asyncio.gather(*[ws.send_str('mute_dp') for ws in hd.rq.app['xair_ifs']]) # a little overkill, to mute every slide, but knowing when a video has finished playing on the device that needs its channel muted at the end is also a little complicated....
 		await asyncio.gather(*[ws.send_json({
 			'task': 'image',
@@ -791,6 +789,8 @@ async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0,
 			'duration': duration if watcher.config['primary'] else 0,
 		}) for ws, watcher in hd.lpi.watchers.items()]) # TODO: check watcher.config here, for 'show_hidden', instead of maintaining variable in watch.js?!  AND, TODO: auto_advance_notify!?
 	elif path.lower().endswith(k_video_formats + k_audio_formats):
+		if path.lower().endswith(k_video_formats):
+			await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
 		await asyncio.gather(*[ws.send_str('unmute_dp') for ws in hd.rq.app['xair_ifs']])
 		if 'Ann' in path:
 			await asyncio.gather(*[ws.send_str('blackout') for ws in hd.rq.app['qlc_ifs']])
@@ -1016,8 +1016,7 @@ async def _init(app):
 	app['obs_ifs'] = [] #await asyncio.gather(*[ws.send_str('slide_scene') for ws in hd.rq.app['obs_ifs']])
 	app['xair_ifs'] = [] #await asyncio.gather(*[ws.send_str('unmute_dp') for ws in hd.rq.app['xair_ifs']])
 	app['bg_music_ifs'] = [] #await asyncio.gather(*[ws.send_str('play') for ws in hd.rq.app['bg_music_ifs']])
-	app['qlc_ifs'] = []
-	app['bg_music_playing'] = False
+	app['qlc_ifs'] = [] #await asyncio.gather(*[ws.send_str('restore') for ws in hd.rq.app['qlc_ifs']])
 
 	app['lps'] = {}
 

@@ -151,15 +151,31 @@ function _clear_timeout() {
 	}
 }
 
+function play_mp3(path, repeat) {
+	// add the video:
+	mp3 = $('main_mp3');
+	if (repeat) {
+		mp3.setAttribute('loop', '');
+	} else {
+		mp3.removeAttribute('loop');
+	}
+	mp3.innerHTML = '<source src="' + path + '" type="audio/mpeg" />';
+	mp3.load();
+
+	$('main_mp3').play(); //why not mp3.play();
+}
 
 function show_video(video, repeat, auto_advance_notify) {
+	if (video.endsWith(".mp3")) {
+		return play_mp3(video, repeat); // would be nice to utilize auto_advance_notify as well
+	} // else...
 	// remove bg image:
 	g_next_bg.style.backgroundImage = "none";
 	_flip_bg();
 	// cancel any current auto-advance:
 	_clear_timeout();
 	// add the video:
-	vid = $('the_video');
+	vid = $('main_video');
 	vid.removeEventListener('ended', _send_next_auto_advance); // in case any are outstanding
 	if (repeat) {
 		vid.setAttribute('loop', '');
@@ -175,7 +191,7 @@ function show_video(video, repeat, auto_advance_notify) {
 		vid.addEventListener('ended',_send_next_auto_advance);
 	}
 
-	$('the_video').play();
+	$('main_video').play();
 	//vid.play();
 }
 
@@ -184,17 +200,21 @@ function _send_next_auto_advance() {
 }
 
 function play_video() {
-	$('the_video').play();
+	$('main_video').play();
+	$('main_mp3').play();
 }
 function pause_video() {
-	$('the_video').pause();
+	$('main_video').pause();
+	$('main_mp3').pause();
 }
 function reset_video() {
-	$('the_video').load();
+	$('main_video').load();
+	$('main_mp3').load();
 }
 function remove_video() {
-	$('the_video').pause()
-	$('the_video').classList.add('hide');
+	$('main_video').pause()
+	$('main_video').classList.add('hide');
+	$('main_mp3').pause();
 }
 
 function _fade() {

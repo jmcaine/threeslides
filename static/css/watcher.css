@@ -29,7 +29,12 @@ html, body {
 	/*transition: background-image 1.0s linear;*/
 }
 
-#the_video {
+#main_video {
+	position: absolute;
+	width: 100%;
+}
+
+#main_mp3 {
 	position: absolute;
 	width: 100%;
 }
