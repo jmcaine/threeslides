@@ -791,7 +791,7 @@ async def _send_media_to_watchers(hd, path, repeat = 0, auto_advance_notify = 0,
 	elif path.lower().endswith(k_video_formats + k_audio_formats):
 		if path.lower().endswith(k_video_formats):
 			await asyncio.gather(*[ws.send_json({'task': 'clear'}) for ws in hd.lpi.watchers.keys()])
-		if 'Unmute' in path:
+		if 'Unmute' in path or 'Ann' in path:
 			await asyncio.gather(*[ws.send_str('unmute_dp') for ws in hd.rq.app['xair_ifs']])
 		if 'Ann' in path:
 			await asyncio.gather(*[ws.send_str('blackout') for ws in hd.rq.app['qlc_ifs']])
